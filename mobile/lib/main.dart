@@ -1,121 +1,262 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
+
+import 'core/theme.dart';
+import 'core/models.dart';
+import 'screens/home_screen.dart';
+import 'screens/captures_screen.dart';
+import 'screens/camera_capture_screen.dart';
 
 void main() {
-  runApp(const MyApp());
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.transparent,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
+
+  runApp(const SmartRoadApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class SmartRoadApp extends StatelessWidget {
+  const SmartRoadApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+      title: 'Smart Road',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme.copyWith(
+        textTheme: GoogleFonts.interTextTheme(AppTheme.lightTheme.textTheme),
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const MainShell(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class MainShell extends StatefulWidget {
+  const MainShell({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<MainShell> createState() => _MainShellState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _MainShellState extends State<MainShell> {
+  int _currentIndex = 0;
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+  final List<Widget> _screens = const [HomeScreen(), CapturesScreen()];
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      extendBody: true,
+      backgroundColor: AppTheme.background,
+      body: IndexedStack(index: _currentIndex, children: _screens),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Center(
+            heightFactor: 1.0,
+            child: Container(
+              height: 68,
+              margin: const EdgeInsets.symmetric(horizontal: 36),
+              padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.94),
+                borderRadius: BorderRadius.circular(38),
+                border: Border.all(color: Colors.white, width: 1.5),
+                boxShadow: AppTheme.frostedDockShadow,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Left Tab: "Home"
+                  Expanded(
+                    child: _buildDockTab(
+                      index: 0,
+                      label: 'Home',
+                      icon: Icons.home_outlined,
+                      activeIcon: Icons.home_rounded,
+                      activeGradient: AppTheme.jellyBlue,
+                    ),
+                  ),
+
+                  // Center Action: Elevated Pitch Black Circular '+' Button
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: GestureDetector(
+                      onTap: () async {
+                        HapticFeedback.mediumImpact();
+                        final dynamic res = await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const CameraCaptureScreen(),
+                          ),
+                        );
+
+                        if (res != null && mounted) {
+                          DetectionResult? result;
+                          if (res is DetectionResult) {
+                            result = res;
+                          }
+
+                          if (!context.mounted) return;
+
+                          if (result != null) {
+                            // Switch to Saved (Captures) tab so user sees their new capture immediately
+                            setState(() => _currentIndex = 1);
+
+                            final isNoDamage =
+                                result.report.damageType.toLowerCase() ==
+                                    'no damage detected' ||
+                                result.report.damageType.toLowerCase() ==
+                                    'clear road';
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(
+                                      isNoDamage
+                                          ? Icons.check_circle_outline
+                                          : Icons.warning_amber_rounded,
+                                      color: Colors.white,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        isNoDamage
+                                            ? 'Scan complete: No road damage detected'
+                                            : 'Detected ${result.report.damageType} (${(result.report.confidenceScore * 100).toInt()}% confidence)!',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                backgroundColor: isNoDamage
+                                    ? AppTheme.severityLow
+                                    : AppTheme.severityHigh,
+                                behavior: SnackBarBehavior.floating,
+                                duration: const Duration(seconds: 4),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      child: Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: AppTheme.obsidianBlack,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.28),
+                              blurRadius: 14,
+                              offset: const Offset(0, 5),
+                            ),
+                          ],
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.add_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Right Tab: "Saved" (Captures)
+                  Expanded(
+                    child: _buildDockTab(
+                      index: 1,
+                      label: 'Saved',
+                      icon: Icons.history,
+                      activeIcon: Icons.history,
+                      activeGradient: AppTheme.jellyBlue,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+    );
+  }
+
+  Widget _buildDockTab({
+    required int index,
+    required String label,
+    required IconData icon,
+    required IconData activeIcon,
+    required LinearGradient activeGradient,
+  }) {
+    final isActive = _currentIndex == index;
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _currentIndex = index);
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Center(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          padding: EdgeInsets.symmetric(
+            horizontal: isActive ? 25 : 8,
+            vertical: 6,
+          ),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: const Color.fromARGB(
+                        255,
+                        84,
+                        9,
+                        182,
+                      ).withValues(alpha: 0.16),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 21,
+                color: isActive
+                    ? const Color.fromRGBO(1, 22, 2, 1)
+                    : AppTheme.textMuted,
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  color: isActive ? AppTheme.textPrimary : AppTheme.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
