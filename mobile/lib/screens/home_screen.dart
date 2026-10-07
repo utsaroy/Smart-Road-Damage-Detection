@@ -1,13 +1,16 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/report_repository.dart';
+import '../core/location_service.dart';
 import '../widgets/jelly_badge.dart';
 import 'full_screen_map.dart';
 import 'profile_screen.dart';
@@ -26,7 +29,8 @@ class _HomeScreenState extends State<HomeScreen>
   late final MapController _mapController;
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
-  final LatLng _userLocation = const LatLng(23.8103, 90.4125);
+  LatLng _userLocation = LocationService.instance.lastKnownLocation;
+  StreamSubscription<Position>? _positionSub;
   String _selectedCategory = 'All';
   bool _radarActive = true;
   String _searchQuery = '';
@@ -43,10 +47,39 @@ class _HomeScreenState extends State<HomeScreen>
     _pulseAnimation = Tween<double>(begin: 0.85, end: 1.25).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    _initUserLocation();
+  }
+
+  Future<void> _initUserLocation() async {
+    try {
+      final loc = await LocationService.instance.getCurrentLocation();
+      if (mounted) {
+        setState(() {
+          _userLocation = loc;
+        });
+        try {
+          _mapController.move(loc, 15.0);
+        } catch (_) {}
+      }
+
+      // Subscribe to real-time device movement
+      _positionSub =
+          LocationService.instance.getPositionStream()?.listen((pos) {
+        if (mounted) {
+          setState(() {
+            _userLocation = LatLng(pos.latitude, pos.longitude);
+          });
+        }
+      });
+    } catch (e) {
+      debugPrint('HomeScreen: Error fetching GPS location: $e');
+    }
   }
 
   @override
   void dispose() {
+    _positionSub?.cancel();
     _pulseController.dispose();
     _mapController.dispose();
     super.dispose();

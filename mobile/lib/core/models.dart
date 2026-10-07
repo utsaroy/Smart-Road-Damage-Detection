@@ -353,9 +353,13 @@ class MapHazardItem {
 class DetectionResult {
   final DamageReport report;
   final double confidence;
+  final bool isRealLocation;
+  final String? imageSource;
 
-  const DetectionResult({
+  DetectionResult({
     required this.report,
-    required this.confidence,
-  });
+    double? confidence,
+    this.isRealLocation = true,
+    this.imageSource,
+  }) : confidence = confidence ?? report.confidenceScore;
 }

@@ -22,7 +22,7 @@ class ReportRepository extends ChangeNotifier {
   bool _vibrationEnabled = true;
   bool _pushNotificationsEnabled = true;
   bool _criticalOnlyAlerts = false;
-  final String _aiModel = 'best.tflite (YOLOv8 On-Device)';
+  String _aiModel = 'best.tflite (YOLOv8 On-Device)';
   bool _autoGpsTagging = true;
   bool _highResCapture = true;
 
@@ -174,143 +174,8 @@ class ReportRepository extends ChangeNotifier {
   }
 
   void _initializeSampleData() {
-    final now = DateTime.now();
-
-    _reports = [
-      DamageReport(
-        id: 'RPT-1042',
-        damageType: 'Pothole',
-        severity: 'Critical',
-        latitude: 23.8118,
-        longitude: 90.4132,
-        address: 'Mirpur Road, Section 10',
-        timestamp: now.subtract(const Duration(minutes: 18)),
-        status: 'detected',
-        confidenceScore: 0.94,
-        reportedBy: 'You',
-        damageAreaSqM: 0.42,
-        notes: 'Deep road surface cavity with sharp broken edges. Immediate asphalt patching recommended.',
-        crackWidthMm: 280.0,
-        estimatedDepthCm: 6.5,
-        boundingBox: const Rect.fromLTWH(0.22, 0.30, 0.48, 0.42),
-      ),
-      DamageReport(
-        id: 'RPT-1041',
-        damageType: 'Longitudinal Crack',
-        severity: 'High',
-        latitude: 23.8092,
-        longitude: 90.4115,
-        address: 'Satmasjid Road, Dhanmondi',
-        timestamp: now.subtract(const Duration(hours: 2, minutes: 14)),
-        status: 'detected',
-        confidenceScore: 0.89,
-        reportedBy: 'You',
-        damageAreaSqM: 0.28,
-        notes: 'Linear surface fracture running parallel to wheel path. Crack seal required to prevent water infiltration.',
-        crackWidthMm: 18.0,
-        estimatedDepthCm: 3.2,
-        boundingBox: const Rect.fromLTWH(0.42, 0.12, 0.18, 0.76),
-      ),
-      DamageReport(
-        id: 'RPT-1040',
-        damageType: 'Alligator Crack',
-        severity: 'Critical',
-        latitude: 23.8130,
-        longitude: 90.4148,
-        address: 'Airport Road, Kurmitola',
-        timestamp: now.subtract(const Duration(hours: 5)),
-        status: 'processing',
-        confidenceScore: 0.91,
-        reportedBy: 'You',
-        damageAreaSqM: 0.85,
-        notes: 'Interconnected fatigue cracking network indicating sub-base structural failure.',
-        crackWidthMm: 12.0,
-        estimatedDepthCm: 4.8,
-        boundingBox: const Rect.fromLTWH(0.18, 0.22, 0.62, 0.54),
-      ),
-      DamageReport(
-        id: 'RPT-1039',
-        damageType: 'Transverse Crack',
-        severity: 'Medium',
-        latitude: 23.8080,
-        longitude: 90.4100,
-        address: 'Road 11, Banani',
-        timestamp: now.subtract(const Duration(days: 1, hours: 3)),
-        status: 'resolved',
-        confidenceScore: 0.85,
-        reportedBy: 'Field Inspector',
-        damageAreaSqM: 0.15,
-        notes: 'Thermal contraction crack repaired with polymer-modified bitumen.',
-        crackWidthMm: 8.5,
-        estimatedDepthCm: 2.1,
-        boundingBox: const Rect.fromLTWH(0.12, 0.46, 0.76, 0.18),
-      ),
-      DamageReport(
-        id: 'RPT-1038',
-        damageType: 'Pothole',
-        severity: 'Medium',
-        latitude: 23.8142,
-        longitude: 90.4110,
-        address: 'Mohakhali Flyover Approach',
-        timestamp: now.subtract(const Duration(days: 2)),
-        status: 'resolved',
-        confidenceScore: 0.82,
-        reportedBy: 'You',
-        damageAreaSqM: 0.19,
-        notes: 'Surface spalling sealed during routine maintenance.',
-        crackWidthMm: 140.0,
-        estimatedDepthCm: 3.0,
-        boundingBox: const Rect.fromLTWH(0.32, 0.38, 0.36, 0.34),
-      ),
-    ];
-
-    _alerts = [
-      HazardAlert(
-        id: 'HZD-01',
-        title: 'Severe Pothole Cluster',
-        severity: 'Critical',
-        distanceMeters: 65,
-        address: 'Mirpur Road, Near Section 10',
-        damageType: 'Pothole',
-        lastReported: now.subtract(const Duration(minutes: 10)),
-        latitude: 23.8118,
-        longitude: 90.4132,
-      ),
-      HazardAlert(
-        id: 'HZD-02',
-        title: 'Deep Longitudinal Crack',
-        severity: 'High',
-        distanceMeters: 145,
-        address: 'Satmasjid Road, Dhanmondi',
-        damageType: 'Longitudinal Crack',
-        lastReported: now.subtract(const Duration(hours: 1)),
-        latitude: 23.8092,
-        longitude: 90.4115,
-      ),
-      HazardAlert(
-        id: 'HZD-03',
-        title: 'Alligator Fatigue Fractures',
-        severity: 'Critical',
-        distanceMeters: 280,
-        address: 'Airport Road, Kurmitola',
-        damageType: 'Alligator Crack',
-        lastReported: now.subtract(const Duration(hours: 4)),
-        latitude: 23.8130,
-        longitude: 90.4148,
-      ),
-      HazardAlert(
-        id: 'HZD-04',
-        title: 'Transverse Surface Crack',
-        severity: 'Medium',
-        distanceMeters: 360,
-        address: 'Road 11, Banani',
-        damageType: 'Transverse Crack',
-        lastReported: now.subtract(const Duration(hours: 8)),
-        latitude: 23.8080,
-        longitude: 90.4100,
-      ),
-    ];
-
+    _reports = [];
+    _alerts = [];
     _recalculateStats();
   }
 
@@ -333,7 +198,7 @@ class ReportRepository extends ChangeNotifier {
       pendingProcessing: pendingCount,
       resolvedIssues: resolvedCount,
       alertsTriggered: _alerts.length,
-      kmCovered: 18.4,
+      kmCovered: 0.0,
     );
   }
 
@@ -372,8 +237,30 @@ class ReportRepository extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setAiModel(String model) {
+    _aiModel = model;
+    notifyListeners();
+  }
+
   Future<void> addReport(DamageReport report) async {
     _reports.insert(0, report);
+    if (report.status.toLowerCase() != 'resolved') {
+      _alerts.insert(
+        0,
+        HazardAlert(
+          id: 'HZD-${report.id}',
+          title: '${report.severity} ${report.damageType}',
+          severity: report.severity,
+          distanceMeters: 0,
+          address: report.address,
+          damageType: report.damageType,
+          lastReported: report.timestamp,
+          latitude: report.latitude,
+          longitude: report.longitude,
+          isActive: true,
+        ),
+      );
+    }
     _recalculateStats();
     notifyListeners();
   }
@@ -385,6 +272,13 @@ class ReportRepository extends ChangeNotifier {
       final newStatus =
           current.status.toLowerCase() == 'resolved' ? 'detected' : 'resolved';
       _reports[idx] = current.copyWith(status: newStatus);
+
+      final alertIdx = _alerts.indexWhere((a) => a.id == 'HZD-$reportId');
+      if (alertIdx != -1) {
+        _alerts[alertIdx] = _alerts[alertIdx].copyWith(
+          isActive: newStatus == 'detected',
+        );
+      }
       _recalculateStats();
       notifyListeners();
     }
@@ -392,12 +286,14 @@ class ReportRepository extends ChangeNotifier {
 
   void deleteReport(String reportId) {
     _reports.removeWhere((r) => r.id == reportId);
+    _alerts.removeWhere((a) => a.id == 'HZD-$reportId');
     _recalculateStats();
     notifyListeners();
   }
 
   void clearAllReports() {
     _reports.clear();
+    _alerts.clear();
     _recalculateStats();
     notifyListeners();
   }

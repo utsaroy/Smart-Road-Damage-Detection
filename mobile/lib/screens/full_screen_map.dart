@@ -1,14 +1,17 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/report_repository.dart';
+import '../core/location_service.dart';
 
 /// Full screen interactive hazard map screen displaying all detected road damages,
 /// user camera captures, and radar hazard alerts.
@@ -34,7 +37,8 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen>
   late final AnimationController _pulseController;
   late final Animation<double> _pulseAnimation;
 
-  LatLng _userLocation = const LatLng(23.8103, 90.4125);
+  LatLng _userLocation = LocationService.instance.lastKnownLocation;
+  StreamSubscription<Position>? _positionSub;
   final double _currentCompassHeading = 42.0;
 
   MapHazardItem? _selectedItem;
@@ -63,10 +67,36 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen>
     _pulseAnimation = Tween<double>(begin: 0.85, end: 1.35).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+
+    _initLiveLocation();
+  }
+
+  Future<void> _initLiveLocation() async {
+    try {
+      if (widget.initialFocusLocation == null) {
+        final loc = await LocationService.instance.getCurrentLocation();
+        if (mounted) {
+          setState(() => _userLocation = loc);
+          try {
+            _mapController.move(loc, 15.5);
+          } catch (_) {}
+        }
+      }
+
+      _positionSub =
+          LocationService.instance.getPositionStream()?.listen((pos) {
+        if (mounted) {
+          setState(() {
+            _userLocation = LatLng(pos.latitude, pos.longitude);
+          });
+        }
+      });
+    } catch (_) {}
   }
 
   @override
   void dispose() {
+    _positionSub?.cancel();
     _pulseController.dispose();
     _mapController.dispose();
     super.dispose();
@@ -78,10 +108,19 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen>
     return directions[index % 8];
   }
 
-  void _recenterGps() {
-    _mapController.move(_userLocation, 15.5);
+  Future<void> _recenterGps() async {
     HapticFeedback.selectionClick();
-    _showToast('Centered on your location');
+    try {
+      final loc = await LocationService.instance.getCurrentLocation();
+      if (mounted) {
+        setState(() => _userLocation = loc);
+        _mapController.move(loc, 16.0);
+        _showToast('Centered on your GPS location');
+      }
+    } catch (_) {
+      _mapController.move(_userLocation, 16.0);
+      _showToast('Centered on last known location');
+    }
   }
 
   void _cycleMapStyle() {

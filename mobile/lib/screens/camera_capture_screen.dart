@@ -1,11 +1,12 @@
 import 'dart:async';
-
+import 'dart:io';
+import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../core/theme.dart';
-import '../core/models.dart';
 import '../core/report_repository.dart';
+import '../core/detection_service.dart';
 
 /// Full-screen in-app camera capture and AI scanner HUD.
 class CameraCaptureScreen extends StatefulWidget {
@@ -16,97 +17,267 @@ class CameraCaptureScreen extends StatefulWidget {
 }
 
 class _CameraCaptureScreenState extends State<CameraCaptureScreen>
-    with SingleTickerProviderStateMixin {
+    with WidgetsBindingObserver {
+  CameraController? _controller;
+  List<CameraDescription> _cameras = [];
+  int _selectedCameraIndex = 0;
+  bool _isInitializing = true;
   bool _isCapturing = false;
   bool _isTorchOn = false;
+  String? _initError;
   String _statusMessage = 'Processing Frame...';
-  late AnimationController _scanLineController;
+  String? _capturedImagePath;
 
   @override
   void initState() {
     super.initState();
-    _scanLineController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2000),
-    )..repeat(reverse: true);
+    WidgetsBinding.instance.addObserver(this);
+    _initCameras();
+  }
+
+  Future<void> _initCameras() async {
+    try {
+      _cameras = await availableCameras();
+      if (_cameras.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isInitializing = false;
+            _initError = 'No camera found on this device.';
+          });
+        }
+        return;
+      }
+
+      // Default to back camera
+      _selectedCameraIndex = _cameras.indexWhere(
+        (c) => c.lensDirection == CameraLensDirection.back,
+      );
+      if (_selectedCameraIndex == -1) _selectedCameraIndex = 0;
+
+      await _setupController(_cameras[_selectedCameraIndex]);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+          _initError = 'Could not access camera: $e';
+        });
+      }
+    }
+  }
+
+  Future<void> _setupController(CameraDescription camera) async {
+    final prevController = _controller;
+    final controller = CameraController(
+      camera,
+      ResolutionPreset.high,
+      enableAudio: false,
+      imageFormatGroup: ImageFormatGroup.jpeg,
+    );
+
+    await prevController?.dispose();
+
+    if (!mounted) return;
+
+    setState(() {
+      _controller = controller;
+      _isInitializing = true;
+      _initError = null;
+    });
+
+    try {
+      await controller.initialize();
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+          _initError = 'Camera initialization failed: $e';
+        });
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _controller?.dispose();
+      _controller = null;
+    } else if (state == AppLifecycleState.resumed) {
+      if (_cameras.isNotEmpty && _controller == null) {
+        _setupController(_cameras[_selectedCameraIndex]);
+      }
+    }
   }
 
   @override
   void dispose() {
-    _scanLineController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _controller?.dispose();
     super.dispose();
   }
 
-  void _toggleTorch() {
-    setState(() => _isTorchOn = !_isTorchOn);
+  Future<void> _toggleTorch() async {
+    final controller = _controller;
+    if (controller == null || !controller.value.isInitialized) {
+      setState(() => _isTorchOn = !_isTorchOn);
+      HapticFeedback.selectionClick();
+      return;
+    }
+
+    try {
+      final newMode = _isTorchOn ? FlashMode.off : FlashMode.torch;
+      await controller.setFlashMode(newMode);
+      if (mounted) {
+        setState(() => _isTorchOn = !_isTorchOn);
+        HapticFeedback.selectionClick();
+      }
+    } catch (_) {
+      setState(() => _isTorchOn = !_isTorchOn);
+    }
+  }
+
+  Future<void> _flipCamera() async {
+    if (_cameras.length < 2) {
+      HapticFeedback.selectionClick();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Single camera detected on device.'),
+          duration: Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    final nextIndex = (_selectedCameraIndex + 1) % _cameras.length;
+    _selectedCameraIndex = nextIndex;
+    await _setupController(_cameras[nextIndex]);
     HapticFeedback.selectionClick();
   }
 
-  Future<void> _triggerCapture({bool isGallery = false}) async {
+  Future<void> _takePicture() async {
     if (_isCapturing) return;
 
-    setState(() {
-      _isCapturing = true;
-      _statusMessage = isGallery
-          ? 'Loading Image & Running YOLOv8...'
-          : 'Capturing High-Res Frame...';
-    });
-    HapticFeedback.mediumImpact();
+    final controller = _controller;
+    final hasLiveCamera = controller != null && controller.value.isInitialized;
 
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
+    try {
+      setState(() {
+        _isCapturing = true;
+        _statusMessage = hasLiveCamera
+            ? 'Capturing high-res photo...'
+            : 'Simulating camera capture...';
+      });
+      HapticFeedback.mediumImpact();
 
-    setState(() {
-      _statusMessage = 'Running YOLOv8 On-Device Model...';
-    });
+      if (hasLiveCamera) {
+        final XFile photo = await controller.takePicture();
+        try {
+          await controller.pausePreview();
+        } catch (_) {}
+        if (!mounted) return;
 
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
+        setState(() {
+          _capturedImagePath = photo.path;
+          _statusMessage = 'Running YOLOv8 AI model...';
+        });
 
-    // Generate a realistic detection report
-    final now = DateTime.now();
-    final randomId = 'RPT-${now.millisecondsSinceEpoch % 10000}';
-    final sampleDamages = [
-      {
-        'type': 'Pothole',
-        'severity': 'Critical',
-        'area': 0.45,
-        'width': 310.0,
-        'depth': 7.2,
-        'box': const Rect.fromLTWH(0.24, 0.32, 0.48, 0.38),
-        'notes': 'Cavity with active edge decay. Immediate asphalt filling recommended.',
-      },
-    ];
+        // Run real on-device inference using best.tflite
+        final result = await DetectionService.instance.processImage(
+          photo.path,
+          'camera',
+        );
 
-    final chosen = sampleDamages[now.second % sampleDamages.length];
+        // Save report to repository
+        await ReportRepository.instance.addReport(result.report);
 
-    final newReport = DamageReport(
-      id: randomId,
-      damageType: chosen['type'] as String,
-      severity: chosen['severity'] as String,
-      latitude: 23.8103 + (now.millisecond % 50) * 0.0001,
-      longitude: 90.4125 + (now.second % 50) * 0.0001,
-      address: 'Fulbarigate',
-      timestamp: now,
-      status: 'detected',
-      confidenceScore: 0.94,
-      reportedBy: 'You',
-      damageAreaSqM: chosen['area'] as double,
-      notes: chosen['notes'] as String,
-      crackWidthMm: chosen['width'] as double,
-      estimatedDepthCm: chosen['depth'] as double,
-      boundingBox: chosen['box'] as Rect,
-    );
+        if (mounted) {
+          Navigator.of(context).pop(result);
+        }
+      } else {
+        // Fallback simulation test
+        await Future.delayed(const Duration(milliseconds: 600));
+        if (!mounted) return;
 
-    await ReportRepository.instance.addReport(newReport);
+        final result = await DetectionService.instance.simulateCapture();
+        await ReportRepository.instance.addReport(result.report);
 
-    if (mounted) {
-      Navigator.of(context).pop(
-        DetectionResult(
-          report: newReport,
-          confidence: newReport.confidenceScore,
-        ),
-      );
+        if (mounted) {
+          Navigator.of(context).pop(result);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error capturing/analyzing photo: $e');
+      if (mounted) {
+        setState(() {
+          _isCapturing = false;
+          _capturedImagePath = null;
+        });
+        try {
+          await controller?.resumePreview();
+        } catch (_) {}
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to analyze photo: $e'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _pickFromGallery() async {
+    if (_isCapturing) return;
+
+    try {
+      final path = await DetectionService.instance.pickGalleryPhoto();
+      if (path != null && mounted) {
+        try {
+          await _controller?.pausePreview();
+        } catch (_) {}
+        setState(() {
+          _isCapturing = true;
+          _capturedImagePath = path;
+          _statusMessage = 'Running YOLOv8 AI model...';
+        });
+
+        // Run on-device inference using best.tflite
+        final result = await DetectionService.instance.processImage(
+          path,
+          'gallery',
+        );
+
+        // Save report to repository
+        await ReportRepository.instance.addReport(result.report);
+
+        if (mounted) {
+          Navigator.of(context).pop(result);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error analyzing gallery image: $e');
+      if (mounted) {
+        setState(() {
+          _isCapturing = false;
+          _capturedImagePath = null;
+        });
+        try {
+          await _controller?.resumePreview();
+        } catch (_) {}
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to analyze gallery photo: $e'),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -119,6 +290,15 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
         child: Stack(
           fit: StackFit.expand,
           children: [
+            // Camera Preview or Frozen Photo
+            _buildCameraPreview(),
+
+            // AI Target Reticle HUD Overlay (only while scanning live feed)
+            if (_capturedImagePath == null &&
+                _controller != null &&
+                _controller!.value.isInitialized)
+              _buildTargetReticle(),
+
             // Top Bar Controls
             Positioned(
               top: MediaQuery.of(context).padding.top + 10,
@@ -128,47 +308,269 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
             ),
 
             // Bottom Shutter & Controls
-            Positioned(
-              bottom: 28,
-              left: 0,
-              right: 0,
-              child: _buildBottomControls(),
-            ),
+            if (!_isCapturing)
+              Positioned(
+                bottom: 28,
+                left: 0,
+                right: 0,
+                child: _buildBottomControls(),
+              ),
 
             // Capturing & Analyzing Spinner Overlay
             if (_isCapturing)
               Container(
-                color: Colors.black.withValues(alpha: 0.75),
+                color: Colors.black.withValues(alpha: 0.40),
                 child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const CircularProgressIndicator(
-                        color: AppTheme.accentOrange,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 28,
+                      vertical: 22,
+                    ),
+                    margin: const EdgeInsets.symmetric(horizontal: 32),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: AppTheme.accentOrange.withValues(alpha: 0.4),
+                        width: 1.2,
                       ),
-                      const SizedBox(height: 18),
-                      Text(
-                        _statusMessage,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.6),
+                          blurRadius: 24,
+                          spreadRadius: 4,
                         ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Inspecting road surface for damage...',
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 12,
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 38,
+                          height: 38,
+                          child: CircularProgressIndicator(
+                            color: AppTheme.accentOrange,
+                            strokeWidth: 3.2,
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(height: 18),
+                        Text(
+                          _statusMessage,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Inspecting road surface for damage...',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCameraPreview() {
+    if (_capturedImagePath != null && File(_capturedImagePath!).existsSync()) {
+      return Image.file(
+        File(_capturedImagePath!),
+        fit: BoxFit.cover,
+        width: double.infinity,
+        height: double.infinity,
+      );
+    }
+    if (_initError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.videocam_off_rounded,
+                color: AppTheme.textMuted,
+                size: 56,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                _initError!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.accentOrange,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
+                icon: const Icon(Icons.photo_library_outlined),
+                label: const Text('Choose from Gallery'),
+                onPressed: _pickFromGallery,
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: AppTheme.borderMedium),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                icon: const Icon(Icons.play_arrow_rounded),
+                label: const Text('Run Test Simulation'),
+                onPressed: _takePicture,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_isInitializing ||
+        _controller == null ||
+        !_controller!.value.isInitialized) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(color: AppTheme.accentAmber),
+            SizedBox(height: 16),
+            Text(
+              'Starting Road Camera...',
+              style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return FittedBox(
+      fit: BoxFit.cover,
+      child: SizedBox(
+        width: _controller!.value.previewSize?.height ?? 1080,
+        height: _controller!.value.previewSize?.width ?? 1920,
+        child: CameraPreview(_controller!),
+      ),
+    );
+  }
+
+  Widget _buildTargetReticle() {
+    return Center(
+      child: IgnorePointer(
+        child: Container(
+          width: 260,
+          height: 260,
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: AppTheme.accentAmber.withValues(alpha: 0.6),
+              width: 1.5,
+            ),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Stack(
+            children: [
+              // Corner Accents
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: AppTheme.accentAmber, width: 3),
+                      left: BorderSide(color: AppTheme.accentAmber, width: 3),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: AppTheme.accentAmber, width: 3),
+                      right: BorderSide(color: AppTheme.accentAmber, width: 3),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 8,
+                left: 8,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: AppTheme.accentAmber, width: 3),
+                      left: BorderSide(color: AppTheme.accentAmber, width: 3),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: AppTheme.accentAmber, width: 3),
+                      right: BorderSide(color: AppTheme.accentAmber, width: 3),
+                    ),
+                  ),
+                ),
+              ),
+              // AI Detection Helper Text
+              Positioned(
+                bottom: -26,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'FRAME ROAD DAMAGE & SNAP PHOTO',
+                      style: TextStyle(
+                        color: AppTheme.accentAmber,
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -243,7 +645,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
         children: [
           // Gallery Shortcut
           GestureDetector(
-            onTap: () => _triggerCapture(isGallery: true),
+            onTap: _pickFromGallery,
             child: Container(
               width: 48,
               height: 48,
@@ -262,7 +664,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
 
           // Big Shutter Button
           GestureDetector(
-            onTap: () => _triggerCapture(isGallery: false),
+            onTap: _takePicture,
             child: Container(
               width: 80,
               height: 80,
@@ -295,18 +697,9 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
             ),
           ),
 
-          // Switch / Info
+          // Flip Camera
           GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('YOLOv8 On-Device AI Scanner ready.'),
-                  duration: Duration(seconds: 1),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
-            },
+            onTap: _flipCamera,
             child: Container(
               width: 48,
               height: 48,
