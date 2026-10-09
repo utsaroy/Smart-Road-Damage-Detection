@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:amar_path/screens/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:latlong2/latlong.dart';
@@ -77,31 +78,68 @@ class _CapturesScreenState extends State<CapturesScreen> {
                           ],
                         ),
                         // Circular Refresh Button
-                        GestureDetector(
-                          onTap: () {
-                            HapticFeedback.lightImpact();
-                            setState(() {});
-                          },
-                          child: Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white,
-                              border: Border.all(
-                                color: AppTheme.borderLight,
-                                width: 1.2,
+                        Row(
+                          children: [
+                            // Circular Search Button
+                            GestureDetector(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                setState(() {});
+                              },
+                              child: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white,
+                                  border: Border.all(
+                                    color: AppTheme.borderLight,
+                                    width: 1.2,
+                                  ),
+                                  boxShadow: AppTheme.cardShadow,
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.refresh_rounded,
+                                    size: 20,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                                ),
                               ),
-                              boxShadow: AppTheme.cardShadow,
                             ),
-                            child: const Center(
-                              child: Icon(
-                                Icons.refresh_rounded,
-                                size: 20,
-                                color: AppTheme.textPrimary,
+                            const SizedBox(width: 10),
+                            // Circular Profile Button
+                            GestureDetector(
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const ProfileScreen(),
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white,
+                                  border: Border.all(
+                                    color: AppTheme.borderLight,
+                                    width: 1.2,
+                                  ),
+                                  boxShadow: AppTheme.cardShadow,
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.person_outline_rounded,
+                                    size: 21,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
@@ -519,6 +557,40 @@ class _CapturesScreenState extends State<CapturesScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
+                      if (report.hasMultipleDefects) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 3,
+                          height: 3,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppTheme.textMuted,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1.5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentOrange.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: AppTheme.accentOrange.withValues(alpha: 0.3),
+                              width: 0.8,
+                            ),
+                          ),
+                          child: Text(
+                            '${report.defectCount} Hazards',
+                            style: const TextStyle(
+                              color: AppTheme.accentOrange,
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                       if (displayAddress != null) ...[
                         const SizedBox(width: 8),
                         Container(
@@ -749,15 +821,150 @@ class _CapturesScreenState extends State<CapturesScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: _buildMetricTile(
-                          'Frame Coverage',
-                          report.boundingBox != null
-                              ? '${(report.boundingBox!.width * report.boundingBox!.height * 100).toStringAsFixed(1)}%'
-                              : 'Detected',
-                          Icons.aspect_ratio_rounded,
+                          report.hasMultipleDefects
+                              ? 'Total Defects'
+                              : 'Frame Coverage',
+                          report.hasMultipleDefects
+                              ? '${report.defectCount} detected'
+                              : (report.boundingBox != null
+                                  ? '${(report.boundingBox!.width * report.boundingBox!.height * 100).toStringAsFixed(1)}%'
+                                  : 'Detected'),
+                          report.hasMultipleDefects
+                              ? Icons.grid_view_rounded
+                              : Icons.aspect_ratio_rounded,
                         ),
                       ),
                     ],
                   ),
+                  if (report.hasMultipleDefects) ...[
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        const Text(
+                          'Detected Hazards Breakdown',
+                          style: TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const Spacer(),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: severityColor.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${report.defectCount} Items',
+                            style: TextStyle(
+                              color: severityColor,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.chipBackground,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppTheme.borderLight),
+                      ),
+                      child: Column(
+                        children: List.generate(report.detections.length, (idx) {
+                          final hazard = report.detections[idx];
+                          final isLast = idx == report.detections.length - 1;
+                          final hColor =
+                              AppTheme.getDamageTypeColor(hazard.label);
+                          final areaPercent =
+                              (hazard.areaFraction * 100).toStringAsFixed(1);
+
+                          return Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 24,
+                                    height: 24,
+                                    decoration: BoxDecoration(
+                                      color: hColor.withValues(alpha: 0.15),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      '${idx + 1}',
+                                      style: TextStyle(
+                                        color: hColor,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          hazard.label,
+                                          style: const TextStyle(
+                                            color: AppTheme.textPrimary,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        Text(
+                                          'Surface coverage: $areaPercent%',
+                                          style: const TextStyle(
+                                            color: AppTheme.textMuted,
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: AppTheme.borderLight),
+                                    ),
+                                    child: Text(
+                                      '${(hazard.confidence * 100).toInt()}% Conf.',
+                                      style: TextStyle(
+                                        color: severityColor,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (!isLast)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8),
+                                  child: Divider(
+                                      height: 1, color: AppTheme.borderLight),
+                                ),
+                            ],
+                          );
+                        }),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
 
                   // Location Details

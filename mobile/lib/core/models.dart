@@ -1,5 +1,44 @@
 import 'package:flutter/material.dart';
 
+/// Represents a single road damage hazard detected by the YOLO model.
+class DetectedHazard {
+  final Rect rect; // Normalized coordinates 0.0 .. 1.0 (left, top, width, height)
+  final double confidence; // Confidence score 0.0 .. 1.0
+  final String label; // Detected class name ('Pothole', 'Longitudinal Crack', etc.)
+
+  const DetectedHazard({
+    required this.rect,
+    required this.confidence,
+    this.label = 'Pothole',
+  });
+
+  double get areaFraction => rect.width * rect.height;
+
+  Map<String, dynamic> toMap() => {
+        'left': rect.left,
+        'top': rect.top,
+        'width': rect.width,
+        'height': rect.height,
+        'confidence': confidence,
+        'label': label,
+      };
+
+  factory DetectedHazard.fromMap(Map<String, dynamic> map) => DetectedHazard(
+        rect: Rect.fromLTWH(
+          (map['left'] as num).toDouble(),
+          (map['top'] as num).toDouble(),
+          (map['width'] as num).toDouble(),
+          (map['height'] as num).toDouble(),
+        ),
+        confidence: (map['confidence'] as num).toDouble(),
+        label: map['label'] as String? ?? 'Pothole',
+      );
+
+  @override
+  String toString() =>
+      'DetectedHazard($label, ${(confidence * 100).toStringAsFixed(1)}%, $rect)';
+}
+
 /// Data models for the Smart Road System app.
 class DamageReport {
   final String id;
@@ -17,7 +56,8 @@ class DamageReport {
   final String? imagePath; // Local file path from camera/gallery
   final double? crackWidthMm;
   final double? estimatedDepthCm;
-  final Rect? boundingBox; // Normalized 0..1 bounding box [left, top, right, bottom]
+  final List<DetectedHazard> detections;
+  final Rect? _legacyBoundingBox;
   final int? imageWidth;
   final int? imageHeight;
 
@@ -37,10 +77,20 @@ class DamageReport {
     this.imagePath,
     this.crackWidthMm,
     this.estimatedDepthCm,
-    this.boundingBox,
+    this.detections = const [],
+    Rect? boundingBox,
     this.imageWidth,
     this.imageHeight,
-  });
+  }) : _legacyBoundingBox = boundingBox;
+
+  /// Primary bounding box for backward compatibility with single-box views
+  Rect? get boundingBox =>
+      detections.isNotEmpty ? detections.first.rect : _legacyBoundingBox;
+
+  int get defectCount => detections.length;
+  bool get hasMultipleDefects => detections.length > 1;
+  double get totalDamageAreaFraction =>
+      detections.fold(0.0, (sum, d) => sum + d.areaFraction);
 
   DamageReport copyWith({
     String? id,
@@ -58,6 +108,7 @@ class DamageReport {
     String? imagePath,
     double? crackWidthMm,
     double? estimatedDepthCm,
+    List<DetectedHazard>? detections,
     Rect? boundingBox,
     int? imageWidth,
     int? imageHeight,
@@ -78,7 +129,8 @@ class DamageReport {
       imagePath: imagePath ?? this.imagePath,
       crackWidthMm: crackWidthMm ?? this.crackWidthMm,
       estimatedDepthCm: estimatedDepthCm ?? this.estimatedDepthCm,
-      boundingBox: boundingBox ?? this.boundingBox,
+      detections: detections ?? this.detections,
+      boundingBox: boundingBox ?? _legacyBoundingBox,
       imageWidth: imageWidth ?? this.imageWidth,
       imageHeight: imageHeight ?? this.imageHeight,
     );
@@ -101,6 +153,7 @@ class DamageReport {
       'imagePath': imagePath,
       'crackWidthMm': crackWidthMm,
       'estimatedDepthCm': estimatedDepthCm,
+      'detections': detections.map((d) => d.toMap()).toList(),
       'bbox_left': boundingBox?.left,
       'bbox_top': boundingBox?.top,
       'bbox_right': boundingBox?.right,
@@ -123,6 +176,23 @@ class DamageReport {
         (map['bbox_bottom'] as num).toDouble(),
       );
     }
+
+    List<DetectedHazard> detectionsList = [];
+    if (map['detections'] != null && map['detections'] is List) {
+      detectionsList = (map['detections'] as List)
+          .map((item) =>
+              DetectedHazard.fromMap(Map<String, dynamic>.from(item as Map)))
+          .toList();
+    } else if (box != null) {
+      detectionsList = [
+        DetectedHazard(
+          rect: box,
+          confidence: (map['confidenceScore'] as num?)?.toDouble() ?? 0.0,
+          label: map['damageType'] as String? ?? 'Pothole',
+        ),
+      ];
+    }
+
     return DamageReport(
       id: map['id'] as String,
       damageType: map['damageType'] as String,
@@ -141,6 +211,7 @@ class DamageReport {
       imagePath: map['imagePath'] as String?,
       crackWidthMm: (map['crackWidthMm'] as num?)?.toDouble(),
       estimatedDepthCm: (map['estimatedDepthCm'] as num?)?.toDouble(),
+      detections: detectionsList,
       boundingBox: box,
       imageWidth: map['imageWidth'] as int?,
       imageHeight: map['imageHeight'] as int?,

@@ -68,7 +68,10 @@ class _MainShellState extends State<MainShell> {
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.94),
                 borderRadius: BorderRadius.circular(38),
-                border: Border.all(color: Colors.white, width: 1.5),
+                border: Border.all(
+                  color: const Color.fromARGB(255, 230, 230, 230),
+                  width: 1,
+                ),
                 boxShadow: AppTheme.frostedDockShadow,
               ),
               child: Row(

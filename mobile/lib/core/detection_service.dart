@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
@@ -192,6 +193,13 @@ class DetectionService {
       crackWidthMm: null,
       estimatedDepthCm: null,
       notes: 'Simulated road scan test. Real model not run.',
+      detections: const [
+        DetectedHazard(
+          rect: Rect.fromLTWH(0.2, 0.25, 0.6, 0.5),
+          confidence: confidence,
+          label: 'Pothole',
+        ),
+      ],
       boundingBox: const Rect.fromLTWH(0.2, 0.25, 0.6, 0.5),
     );
 
@@ -227,31 +235,63 @@ class DetectionService {
         (tfliteResult.modelExecuted &&
             tfliteResult.bestCandidate != null &&
             tfliteResult.maxConfidence >= 0.12)) {
-      final primary = tfliteResult.primaryDetection!;
-      final conf = double.parse(primary.confidence.toStringAsFixed(2));
-      final rect = primary.rect;
-      final areaFraction = rect.width * rect.height;
-      final severity =
-          _calculateSeverityFromDetection(primary.confidence, areaFraction);
+      final List<DetectionBox> sourceBoxes = tfliteResult.detections.isNotEmpty
+          ? tfliteResult.detections
+          : (tfliteResult.bestCandidate != null
+              ? [tfliteResult.bestCandidate!]
+              : <DetectionBox>[]);
+
+      final List<DetectedHazard> hazards = sourceBoxes.map((box) {
+        return DetectedHazard(
+          rect: box.rect,
+          confidence: double.parse(box.confidence.toStringAsFixed(2)),
+          label: box.label.isNotEmpty ? box.label : 'Pothole',
+        );
+      }).toList();
+
+      final primary = hazards.isNotEmpty ? hazards.first : null;
+      final maxConf = hazards.isNotEmpty
+          ? hazards.map((h) => h.confidence).reduce(math.max)
+          : 0.0;
+      final severity = _calculateSeverityFromDetections(hazards);
+
+      // Smart dynamic title based on defect count and types
+      String damageTitle;
+      if (hazards.length > 1) {
+        final uniqueLabels = hazards.map((h) => h.label).toSet();
+        if (uniqueLabels.length == 1) {
+          final label = uniqueLabels.first;
+          damageTitle = '$label Cluster (${hazards.length} Defects)';
+        } else {
+          damageTitle = 'Multiple Hazards (${hazards.length} Defects)';
+        }
+      } else if (hazards.isNotEmpty) {
+        damageTitle = hazards.first.label;
+      } else {
+        damageTitle = 'Pothole';
+      }
+
+      final notes = hazards.length > 1
+          ? 'Detected ${hazards.length} road hazards by ${TFLiteDetector.instance.activeModelName} (Max ${(maxConf * 100).toStringAsFixed(1)}% conf, ${tfliteResult.inferenceTimeMs}ms inference).'
+          : 'Verified by ${TFLiteDetector.instance.activeModelName} on-device YOLO model (${((primary?.confidence ?? 0.0) * 100).toStringAsFixed(1)}% confidence, ${tfliteResult.inferenceTimeMs}ms inference).';
 
       report = DamageReport(
         id: reportId,
-        damageType: (primary.label.isNotEmpty) ? primary.label : 'Pothole',
+        damageType: damageTitle,
         severity: severity,
         latitude: loc.lat,
         longitude: loc.lng,
         address: address,
         timestamp: DateTime.now(),
         status: 'detected',
-        confidenceScore: conf,
+        confidenceScore: maxConf,
         reportedBy: 'You',
         damageAreaSqM: null,
         crackWidthMm: null,
         estimatedDepthCm: null,
-        notes:
-            'Verified by ${TFLiteDetector.instance.activeModelName} on-device YOLO model (${(primary.confidence * 100).toStringAsFixed(1)}% confidence, ${tfliteResult.inferenceTimeMs}ms inference).',
+        notes: notes,
         imagePath: permanentPath,
-        boundingBox: rect,
+        detections: hazards,
         imageWidth:
             tfliteResult.imageWidth > 0 ? tfliteResult.imageWidth : null,
         imageHeight:
@@ -276,7 +316,7 @@ class DetectionService {
         notes:
             'Inference completed in ${tfliteResult.inferenceTimeMs}ms. No potholes or cracks detected on road surface.',
         imagePath: permanentPath,
-        boundingBox: null,
+        detections: const [],
         imageWidth:
             tfliteResult.imageWidth > 0 ? tfliteResult.imageWidth : null,
         imageHeight:
@@ -292,13 +332,18 @@ class DetectionService {
     );
   }
 
-  String _calculateSeverityFromDetection(
-      double confidence, double areaFraction) {
-    if (areaFraction > 0.18 || confidence > 0.82) {
+  String _calculateSeverityFromDetections(List<DetectedHazard> hazards) {
+    if (hazards.isEmpty) return 'Low';
+
+    final maxConf = hazards.map((h) => h.confidence).reduce(math.max);
+    final totalArea = hazards.fold(0.0, (sum, h) => sum + h.areaFraction);
+    final count = hazards.length;
+
+    if (count >= 3 || totalArea > 0.18 || maxConf > 0.82) {
       return 'Critical';
-    } else if (areaFraction > 0.08 || confidence > 0.60) {
+    } else if (count >= 2 || totalArea > 0.08 || maxConf > 0.60) {
       return 'High';
-    } else if (areaFraction > 0.03 || confidence > 0.40) {
+    } else if (totalArea > 0.03 || maxConf > 0.40) {
       return 'Medium';
     } else {
       return 'Low';

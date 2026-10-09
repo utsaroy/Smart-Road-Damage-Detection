@@ -297,54 +297,75 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
     );
   }
 
-  /// Exact bounding box mapped through applyBoxFit to match the rendered image pixels
+  /// Exact bounding boxes mapped through applyBoxFit to match the rendered image pixels
   Widget _buildExactBoundingBoxOverlay(Color damageColor, Color severityColor) {
-    final rawRect = widget.report.boundingBox;
-    if (rawRect == null) return const SizedBox.shrink();
+    final detections = widget.report.detections.isNotEmpty
+        ? widget.report.detections
+        : (widget.report.boundingBox != null
+            ? [
+                DetectedHazard(
+                  rect: widget.report.boundingBox!,
+                  confidence: widget.report.confidenceScore,
+                  label: widget.report.damageType,
+                ),
+              ]
+            : <DetectedHazard>[]);
+
+    if (detections.isEmpty) return const SizedBox.shrink();
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final containerSize = Size(constraints.maxWidth, constraints.maxHeight);
+        final List<Widget> boxWidgets = [];
 
-        Rect boxOnScreen;
+        for (int i = 0; i < detections.length; i++) {
+          final hazard = detections[i];
+          final rawRect = hazard.rect;
+          Rect boxOnScreen;
 
-        if (_imageWidth != null && _imageHeight != null && _imageWidth! > 0 && _imageHeight! > 0) {
-          final imageSize = Size(_imageWidth!.toDouble(), _imageHeight!.toDouble());
-          final fitted = applyBoxFit(_currentFit, imageSize, containerSize);
+          if (_imageWidth != null &&
+              _imageHeight != null &&
+              _imageWidth! > 0 &&
+              _imageHeight! > 0) {
+            final imageSize =
+                Size(_imageWidth!.toDouble(), _imageHeight!.toDouble());
+            final fitted = applyBoxFit(_currentFit, imageSize, containerSize);
 
-          final sourceRect = Alignment.center.inscribe(
-            fitted.source,
-            Offset.zero & imageSize,
-          );
-          final destinationRect = Alignment.center.inscribe(
-            fitted.destination,
-            Offset.zero & containerSize,
-          );
+            final sourceRect = Alignment.center.inscribe(
+              fitted.source,
+              Offset.zero & imageSize,
+            );
+            final destinationRect = Alignment.center.inscribe(
+              fitted.destination,
+              Offset.zero & containerSize,
+            );
 
-          final scaleX = destinationRect.width / sourceRect.width;
-          final scaleY = destinationRect.height / sourceRect.height;
+            final scaleX = destinationRect.width / sourceRect.width;
+            final scaleY = destinationRect.height / sourceRect.height;
 
-          final boxLeft = destinationRect.left +
-              (rawRect.left * imageSize.width - sourceRect.left) * scaleX;
-          final boxTop = destinationRect.top +
-              (rawRect.top * imageSize.height - sourceRect.top) * scaleY;
-          final boxWidth = (rawRect.width * imageSize.width) * scaleX;
-          final boxHeight = (rawRect.height * imageSize.height) * scaleY;
+            final boxLeft = destinationRect.left +
+                (rawRect.left * imageSize.width - sourceRect.left) * scaleX;
+            final boxTop = destinationRect.top +
+                (rawRect.top * imageSize.height - sourceRect.top) * scaleY;
+            final boxWidth = (rawRect.width * imageSize.width) * scaleX;
+            final boxHeight = (rawRect.height * imageSize.height) * scaleY;
 
-          boxOnScreen = Rect.fromLTWH(boxLeft, boxTop, boxWidth, boxHeight);
-        } else {
-          // Fallback if image size is still loading
-          boxOnScreen = Rect.fromLTWH(
-            rawRect.left * containerSize.width,
-            rawRect.top * containerSize.height,
-            rawRect.width * containerSize.width,
-            rawRect.height * containerSize.height,
-          );
-        }
+            boxOnScreen = Rect.fromLTWH(boxLeft, boxTop, boxWidth, boxHeight);
+          } else {
+            // Fallback if image size is still loading
+            boxOnScreen = Rect.fromLTWH(
+              rawRect.left * containerSize.width,
+              rawRect.top * containerSize.height,
+              rawRect.width * containerSize.width,
+              rawRect.height * containerSize.height,
+            );
+          }
 
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
+          final labelText = detections.length > 1
+              ? '#${i + 1} ${hazard.label}'
+              : hazard.label;
+
+          boxWidgets.add(
             Positioned(
               left: boxOnScreen.left,
               top: boxOnScreen.top,
@@ -353,19 +374,24 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
               child: CustomPaint(
                 painter: _CornerBracketPainter(
                   color: severityColor,
-                  tag: '${(widget.report.confidenceScore * 100).toInt()}%',
-                  label: widget.report.damageType,
+                  tag: '${(hazard.confidence * 100).toInt()}%',
+                  label: labelText,
                 ),
               ),
             ),
-          ],
+          );
+        }
+
+        return Stack(
+          clipBehavior: Clip.none,
+          children: boxWidgets,
         );
       },
     );
   }
 }
 
-/// Fullscreen zoomable damage inspector with bounding box
+/// Fullscreen zoomable damage inspector with multi-hazard bounding boxes
 class _FullScreenDamageViewer extends StatelessWidget {
   final DamageReport report;
   final int? imageWidth;
@@ -380,14 +406,32 @@ class _FullScreenDamageViewer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final severityColor = AppTheme.getSeverityColor(report.severity);
-    final rawRect = report.boundingBox;
+    final detections = report.detections.isNotEmpty
+        ? report.detections
+        : (report.boundingBox != null
+            ? [
+                DetectedHazard(
+                  rect: report.boundingBox!,
+                  confidence: report.confidenceScore,
+                  label: report.damageType,
+                ),
+              ]
+            : <DetectedHazard>[]);
+
+    final titleText = report.hasMultipleDefects
+        ? '${report.defectCount} Hazards Inspection'
+        : '${report.damageType} Inspection';
+
+    final badgeText = report.hasMultipleDefects
+        ? '${report.defectCount} Detected'
+        : '${(report.confidenceScore * 100).toInt()}% Conf.';
 
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black87,
         title: Text(
-          '${report.damageType} Inspection',
+          titleText,
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
         actions: [
@@ -402,7 +446,7 @@ class _FullScreenDamageViewer extends StatelessWidget {
                   border: Border.all(color: severityColor),
                 ),
                 child: Text(
-                  '${(report.confidenceScore * 100).toInt()}% Conf.',
+                  badgeText,
                   style: TextStyle(
                     color: severityColor,
                     fontSize: 11,
@@ -420,41 +464,57 @@ class _FullScreenDamageViewer extends StatelessWidget {
           maxScale: 5.0,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final containerSize = Size(constraints.maxWidth, constraints.maxHeight);
+              final containerSize =
+                  Size(constraints.maxWidth, constraints.maxHeight);
               final imgW = (imageWidth ?? 640).toDouble();
               final imgH = (imageHeight ?? 640).toDouble();
               final imageSize = Size(imgW, imgH);
 
-              final fitted = applyBoxFit(BoxFit.contain, imageSize, containerSize);
+              final fitted =
+                  applyBoxFit(BoxFit.contain, imageSize, containerSize);
               final destinationRect = Alignment.center.inscribe(
                 fitted.destination,
                 Offset.zero & containerSize,
               );
 
-              return Stack(
-                children: [
-                  Positioned.fromRect(
-                    rect: destinationRect,
-                    child: Image.file(
-                      File(report.imagePath!),
-                      fit: BoxFit.contain,
-                    ),
+              final List<Widget> stackChildren = [
+                Positioned.fromRect(
+                  rect: destinationRect,
+                  child: Image.file(
+                    File(report.imagePath!),
+                    fit: BoxFit.contain,
                   ),
-                  if (rawRect != null)
-                    Positioned(
-                      left: destinationRect.left + rawRect.left * destinationRect.width,
-                      top: destinationRect.top + rawRect.top * destinationRect.height,
-                      width: rawRect.width * destinationRect.width,
-                      height: rawRect.height * destinationRect.height,
-                      child: CustomPaint(
-                        painter: _CornerBracketPainter(
-                          color: severityColor,
-                          tag: '${(report.confidenceScore * 100).toInt()}%',
-                          label: report.damageType,
-                        ),
+                ),
+              ];
+
+              for (int i = 0; i < detections.length; i++) {
+                final hazard = detections[i];
+                final rawRect = hazard.rect;
+                final labelText = detections.length > 1
+                    ? '#${i + 1} ${hazard.label}'
+                    : hazard.label;
+
+                stackChildren.add(
+                  Positioned(
+                    left: destinationRect.left +
+                        rawRect.left * destinationRect.width,
+                    top: destinationRect.top +
+                        rawRect.top * destinationRect.height,
+                    width: rawRect.width * destinationRect.width,
+                    height: rawRect.height * destinationRect.height,
+                    child: CustomPaint(
+                      painter: _CornerBracketPainter(
+                        color: severityColor,
+                        tag: '${(hazard.confidence * 100).toInt()}%',
+                        label: labelText,
                       ),
                     ),
-                ],
+                  ),
+                );
+              }
+
+              return Stack(
+                children: stackChildren,
               );
             },
           ),

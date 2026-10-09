@@ -33,7 +33,7 @@ class _HomeScreenState extends State<HomeScreen>
   StreamSubscription<Position>? _positionSub;
   String _selectedCategory = 'All';
   bool _radarActive = true;
-  String _searchQuery = '';
+  final String _searchQuery = '';
 
   @override
   void initState() {
@@ -64,8 +64,9 @@ class _HomeScreenState extends State<HomeScreen>
       }
 
       // Subscribe to real-time device movement
-      _positionSub =
-          LocationService.instance.getPositionStream()?.listen((pos) {
+      _positionSub = LocationService.instance.getPositionStream()?.listen((
+        pos,
+      ) {
         if (mounted) {
           setState(() {
             _userLocation = LatLng(pos.latitude, pos.longitude);
@@ -107,88 +108,6 @@ class _HomeScreenState extends State<HomeScreen>
     if (diff.inHours < 24) return '${diff.inHours}h ago';
     if (diff.inDays == 1) return 'Yesterday';
     return '${diff.inDays}d ago';
-  }
-
-  void _showSearchSheet() {
-    HapticFeedback.lightImpact();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Container(
-              padding: EdgeInsets.only(
-                top: 20,
-                left: 20,
-                right: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-              ),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppTheme.borderMedium,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Search Road Hazards',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    autofocus: true,
-                    decoration: InputDecoration(
-                      hintText: 'Search damage, street, or severity...',
-                      prefixIcon: const Icon(
-                        Icons.search_rounded,
-                        color: AppTheme.textMuted,
-                      ),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.close_rounded, size: 18),
-                              onPressed: () {
-                                setSheetState(() => _searchQuery = '');
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
-                      filled: true,
-                      fillColor: AppTheme.chipBackground,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onChanged: (val) {
-                      setSheetState(() => _searchQuery = val);
-                      setState(() => _searchQuery = val);
-                    },
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
   }
 
   @override
@@ -259,7 +178,10 @@ class _HomeScreenState extends State<HomeScreen>
                           children: [
                             // Circular Search Button
                             GestureDetector(
-                              onTap: _showSearchSheet,
+                              onTap: () {
+                                HapticFeedback.lightImpact();
+                                setState(() {});
+                              },
                               child: Container(
                                 width: 44,
                                 height: 44,
@@ -274,8 +196,8 @@ class _HomeScreenState extends State<HomeScreen>
                                 ),
                                 child: const Center(
                                   child: Icon(
-                                    Icons.search_rounded,
-                                    size: 21,
+                                    Icons.refresh_rounded,
+                                    size: 20,
                                     color: AppTheme.textPrimary,
                                   ),
                                 ),
