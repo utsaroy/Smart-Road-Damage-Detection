@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,11 +23,18 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
   List<CameraDescription> _cameras = [];
   int _selectedCameraIndex = 0;
   bool _isInitializing = true;
+  bool _isSwitchingCamera = false;
   bool _isCapturing = false;
   bool _isTorchOn = false;
   String? _initError;
   String _statusMessage = 'Processing Frame...';
   String? _capturedImagePath;
+
+  bool get _hasFlash {
+    if (_cameras.isEmpty || _selectedCameraIndex >= _cameras.length) return false;
+    return _cameras[_selectedCameraIndex].lensDirection ==
+        CameraLensDirection.back;
+  }
 
   @override
   void initState() {
@@ -48,7 +56,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
         return;
       }
 
-      // Default to back camera
+      // Default to primary back-facing road camera
       _selectedCameraIndex = _cameras.indexWhere(
         (c) => c.lensDirection == CameraLensDirection.back,
       );
@@ -67,16 +75,30 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
 
   Future<void> _setupController(CameraDescription camera) async {
     final prevController = _controller;
+
+    // Safely turn off torch on previous controller before disposing
+    if (_isTorchOn && prevController != null && prevController.value.isInitialized) {
+      try {
+        await prevController.setFlashMode(FlashMode.off);
+      } catch (_) {}
+    }
+    if (mounted) {
+      setState(() => _isTorchOn = false);
+    }
+
+    _controller = null;
+    try {
+      await prevController?.dispose();
+    } catch (_) {}
+
+    if (!mounted) return;
+
     final controller = CameraController(
       camera,
       ResolutionPreset.high,
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.jpeg,
     );
-
-    await prevController?.dispose();
-
-    if (!mounted) return;
 
     setState(() {
       _controller = controller;
@@ -86,6 +108,10 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
 
     try {
       await controller.initialize();
+      try {
+        await controller.setFlashMode(FlashMode.off);
+      } catch (_) {}
+
       if (mounted) {
         setState(() {
           _isInitializing = false;
@@ -104,10 +130,16 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
+      if (_isTorchOn && _controller != null && _controller!.value.isInitialized) {
+        try {
+          _controller!.setFlashMode(FlashMode.off);
+        } catch (_) {}
+      }
+      _isTorchOn = false;
       _controller?.dispose();
       _controller = null;
     } else if (state == AppLifecycleState.resumed) {
-      if (_cameras.isNotEmpty && _controller == null) {
+      if (_cameras.isNotEmpty && _controller == null && !_isSwitchingCamera) {
         _setupController(_cameras[_selectedCameraIndex]);
       }
     }
@@ -116,31 +148,50 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    if (_isTorchOn && _controller != null && _controller!.value.isInitialized) {
+      try {
+        _controller!.setFlashMode(FlashMode.off);
+      } catch (_) {}
+    }
     _controller?.dispose();
     super.dispose();
   }
 
   Future<void> _toggleTorch() async {
     final controller = _controller;
-    if (controller == null || !controller.value.isInitialized) {
-      setState(() => _isTorchOn = !_isTorchOn);
-      HapticFeedback.selectionClick();
+    if (controller == null || !controller.value.isInitialized) return;
+
+    if (!_hasFlash) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Flash is not supported on this camera.'),
+          duration: Duration(seconds: 1),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       return;
     }
 
     try {
-      final newMode = _isTorchOn ? FlashMode.off : FlashMode.torch;
-      await controller.setFlashMode(newMode);
+      final nextState = !_isTorchOn;
+      await controller.setFlashMode(
+        nextState ? FlashMode.torch : FlashMode.off,
+      );
       if (mounted) {
-        setState(() => _isTorchOn = !_isTorchOn);
+        setState(() => _isTorchOn = nextState);
         HapticFeedback.selectionClick();
       }
-    } catch (_) {
-      setState(() => _isTorchOn = !_isTorchOn);
+    } catch (e) {
+      debugPrint('Error toggling torch: $e');
+      if (mounted) {
+        setState(() => _isTorchOn = false);
+      }
     }
   }
 
   Future<void> _flipCamera() async {
+    if (_isCapturing || _isSwitchingCamera) return;
+
     if (_cameras.length < 2) {
       HapticFeedback.selectionClick();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -152,10 +203,28 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
       );
       return;
     }
-    final nextIndex = (_selectedCameraIndex + 1) % _cameras.length;
-    _selectedCameraIndex = nextIndex;
-    await _setupController(_cameras[nextIndex]);
+
+    setState(() => _isSwitchingCamera = true);
     HapticFeedback.selectionClick();
+
+    try {
+      if (_isTorchOn && _controller != null && _controller!.value.isInitialized) {
+        try {
+          await _controller!.setFlashMode(FlashMode.off);
+        } catch (_) {}
+      }
+      if (mounted) {
+        setState(() => _isTorchOn = false);
+      }
+
+      final nextIndex = (_selectedCameraIndex + 1) % _cameras.length;
+      _selectedCameraIndex = nextIndex;
+      await _setupController(_cameras[nextIndex]);
+    } finally {
+      if (mounted) {
+        setState(() => _isSwitchingCamera = false);
+      }
+    }
   }
 
   Future<void> _takePicture() async {
@@ -198,16 +267,7 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
           Navigator.of(context).pop(result);
         }
       } else {
-        // Fallback simulation test
-        await Future.delayed(const Duration(milliseconds: 600));
-        if (!mounted) return;
-
-        final result = await DetectionService.instance.simulateCapture();
-        await ReportRepository.instance.addReport(result.report);
-
-        if (mounted) {
-          Navigator.of(context).pop(result);
-        }
+        debugPrint("Camera not found");
       }
     } catch (e) {
       debugPrint('Error capturing/analyzing photo: $e');
@@ -418,8 +478,10 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                 ),
                 icon: const Icon(Icons.photo_library_outlined),
                 label: const Text('Choose from Gallery'),
@@ -551,8 +613,10 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
                 right: 0,
                 child: Center(
                   child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: 0.65),
                       borderRadius: BorderRadius.circular(10),
@@ -628,9 +692,19 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
           ),
           icon: Icon(
             _isTorchOn ? Icons.flash_on : Icons.flash_off,
-            color: _isTorchOn ? AppTheme.accentAmber : Colors.white,
+            color: _isTorchOn
+                ? AppTheme.accentAmber
+                : (_hasFlash ? Colors.white : Colors.white38),
           ),
-          onPressed: _toggleTorch,
+          onPressed: _hasFlash ? _toggleTorch : () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Flash is not available on this camera.'),
+                duration: Duration(seconds: 1),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
         ),
       ],
     );
@@ -645,52 +719,58 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
         children: [
           // Gallery Shortcut
           GestureDetector(
-            onTap: _pickFromGallery,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.5),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-              ),
-              child: const Icon(
-                Icons.photo_library_outlined,
-                color: Colors.white,
-                size: 22,
+            onTap: (_isCapturing || _isSwitchingCamera) ? null : _pickFromGallery,
+            child: Opacity(
+              opacity: (_isCapturing || _isSwitchingCamera) ? 0.4 : 1.0,
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                ),
+                child: const Icon(
+                  Icons.photo_library_outlined,
+                  color: Colors.white,
+                  size: 22,
+                ),
               ),
             ),
           ),
 
           // Big Shutter Button
           GestureDetector(
-            onTap: _takePicture,
-            child: Container(
-              width: 80,
-              height: 80,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 4),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppTheme.accentOrange.withValues(alpha: 0.5),
-                    blurRadius: 18,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: Center(
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: const BoxDecoration(
-                    color: AppTheme.accentOrange,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.camera_alt_rounded,
-                    color: Colors.white,
-                    size: 30,
+            onTap: (_isCapturing || _isSwitchingCamera) ? null : _takePicture,
+            child: Opacity(
+              opacity: (_isCapturing || _isSwitchingCamera) ? 0.6 : 1.0,
+              child: Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppTheme.accentOrange.withValues(alpha: 0.5),
+                      blurRadius: 18,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Center(
+                  child: Container(
+                    width: 64,
+                    height: 64,
+                    decoration: const BoxDecoration(
+                      color: AppTheme.accentOrange,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      color: Colors.white,
+                      size: 30,
+                    ),
                   ),
                 ),
               ),
@@ -699,19 +779,22 @@ class _CameraCaptureScreenState extends State<CameraCaptureScreen>
 
           // Flip Camera
           GestureDetector(
-            onTap: _flipCamera,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.5),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-              ),
-              child: const Icon(
-                Icons.flip_camera_android_rounded,
-                color: Colors.white,
-                size: 22,
+            onTap: (_isCapturing || _isSwitchingCamera) ? null : _flipCamera,
+            child: Opacity(
+              opacity: (_isCapturing || _isSwitchingCamera) ? 0.4 : 1.0,
+              child: Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
+                ),
+                child: const Icon(
+                  Icons.flip_camera_android_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
               ),
             ),
           ),

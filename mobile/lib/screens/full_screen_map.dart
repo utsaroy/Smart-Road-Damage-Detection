@@ -12,6 +12,8 @@ import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/report_repository.dart';
 import '../core/location_service.dart';
+import '../core/compass_service.dart';
+import '../widgets/heading_cone_painter.dart';
 
 /// Full screen interactive hazard map screen displaying all detected road damages,
 /// user camera captures, and radar hazard alerts.
@@ -39,7 +41,8 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen>
 
   LatLng _userLocation = LocationService.instance.lastKnownLocation;
   StreamSubscription<Position>? _positionSub;
-  final double _currentCompassHeading = 42.0;
+  StreamSubscription<double>? _compassSub;
+  double _currentCompassHeading = CompassService.instance.currentHeading;
 
   MapHazardItem? _selectedItem;
   final bool _showRadiusRing = true;
@@ -68,7 +71,18 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
+    _initCompass();
     _initLiveLocation();
+  }
+
+  void _initCompass() {
+    CompassService.instance.start();
+    _currentCompassHeading = CompassService.instance.currentHeading;
+    _compassSub = CompassService.instance.headingStream.listen((heading) {
+      if (mounted) {
+        setState(() => _currentCompassHeading = heading);
+      }
+    });
   }
 
   Future<void> _initLiveLocation() async {
@@ -89,6 +103,7 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen>
           setState(() {
             _userLocation = LatLng(pos.latitude, pos.longitude);
           });
+          CompassService.instance.updateFromGpsCourse(pos.heading, pos.speed);
         }
       });
     } catch (_) {}
@@ -97,16 +112,14 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen>
   @override
   void dispose() {
     _positionSub?.cancel();
+    _compassSub?.cancel();
     _pulseController.dispose();
     _mapController.dispose();
     super.dispose();
   }
 
-  String _getHeadingCardinal(double deg) {
-    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    final index = ((deg + 22.5) % 360 / 45).floor();
-    return directions[index % 8];
-  }
+  String _getHeadingCardinal(double deg) =>
+      CompassService.getHeadingCardinal(deg);
 
   Future<void> _recenterGps() async {
     HapticFeedback.selectionClick();
@@ -875,52 +888,5 @@ class _FullScreenMapScreenState extends State<FullScreenMapScreen>
         ],
       ),
     );
-  }
-}
-
-/// Directional field-of-view gradient vision cone radiating from user location marker
-class HeadingConePainter extends CustomPainter {
-  final Color color;
-  final double angleRadians;
-
-  HeadingConePainter({
-    required this.color,
-    required this.angleRadians,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-    const sweepAngle = math.pi / 2.8;
-    final startAngle = angleRadians - (sweepAngle / 2.0);
-
-    final paint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          color.withValues(alpha: 0.40),
-          color.withValues(alpha: 0.16),
-          color.withValues(alpha: 0.0),
-        ],
-        stops: const [0.0, 0.50, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: radius))
-      ..style = PaintingStyle.fill;
-
-    final path = Path()
-      ..moveTo(center.dx, center.dy)
-      ..arcTo(
-        Rect.fromCircle(center: center, radius: radius),
-        startAngle,
-        sweepAngle,
-        false,
-      )
-      ..close();
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant HeadingConePainter oldDelegate) {
-    return oldDelegate.color != color || oldDelegate.angleRadians != angleRadians;
   }
 }

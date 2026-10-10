@@ -4,11 +4,12 @@ import 'package:google_fonts/google_fonts.dart';
 
 import 'core/theme.dart';
 import 'core/models.dart';
+import 'core/report_repository.dart';
 import 'screens/home_screen.dart';
 import 'screens/captures_screen.dart';
 import 'screens/camera_capture_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -18,6 +19,9 @@ void main() {
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
+
+  // Hydrate local repository from SQLite database
+  await ReportRepository.instance.init();
 
   runApp(const SmartRoadApp());
 }

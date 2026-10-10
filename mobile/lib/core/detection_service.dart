@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:path_provider/path_provider.dart';
+
 import 'models.dart';
 import 'tflite_detector.dart';
 import 'location_service.dart';
@@ -72,15 +74,14 @@ class DetectionService {
 
   ({double lat, double lng, bool isReal}) _fallbackCoordinates() {
     final loc = LocationService.instance.lastKnownLocation;
-    return (
-      lat: loc.latitude,
-      lng: loc.longitude,
-      isReal: false,
-    );
+    return (lat: loc.latitude, lng: loc.longitude, isReal: false);
   }
 
   /// Permanently save captured image into application documents directory
-  Future<String> saveImagePermanently(String sourcePath, String reportId) async {
+  Future<String> saveImagePermanently(
+    String sourcePath,
+    String reportId,
+  ) async {
     try {
       final appDir = await getApplicationDocumentsDirectory();
       final capturesDir = Directory('${appDir.path}/road_captures');
@@ -122,9 +123,7 @@ class DetectionService {
   /// Pick raw photo from device camera.
   Future<String?> pickCameraPhoto() async {
     try {
-      final XFile? photo = await _picker.pickImage(
-        source: ImageSource.camera,
-      );
+      final XFile? photo = await _picker.pickImage(source: ImageSource.camera);
       return photo?.path;
     } catch (e) {
       debugPrint('Camera pick error: $e');
@@ -135,9 +134,7 @@ class DetectionService {
   /// Pick raw image from gallery.
   Future<String?> pickGalleryPhoto() async {
     try {
-      final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
-      );
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
       return image?.path;
     } catch (e) {
       debugPrint('Gallery pick error: $e');
@@ -169,48 +166,6 @@ class DetectionService {
     }
   }
 
-  /// Simulate a capture for testing without camera hardware
-  Future<DetectionResult> simulateCapture() async {
-    final loc = await getCurrentLocation();
-    final address = loc.isReal
-        ? 'GPS (${loc.lat.toStringAsFixed(5)}, ${loc.lng.toStringAsFixed(5)})'
-        : 'Fulbarigate, Khulna';
-    final reportId = 'RPT-${DateTime.now().millisecondsSinceEpoch % 10000}';
-    const confidence = 0.88;
-
-    final report = DamageReport(
-      id: reportId,
-      damageType: 'Pothole',
-      severity: 'High',
-      latitude: loc.lat,
-      longitude: loc.lng,
-      address: address,
-      timestamp: DateTime.now(),
-      status: 'detected',
-      confidenceScore: confidence,
-      reportedBy: 'You',
-      damageAreaSqM: null,
-      crackWidthMm: null,
-      estimatedDepthCm: null,
-      notes: 'Simulated road scan test. Real model not run.',
-      detections: const [
-        DetectedHazard(
-          rect: Rect.fromLTWH(0.2, 0.25, 0.6, 0.5),
-          confidence: confidence,
-          label: 'Pothole',
-        ),
-      ],
-      boundingBox: const Rect.fromLTWH(0.2, 0.25, 0.6, 0.5),
-    );
-
-    return DetectionResult(
-      report: report,
-      confidence: confidence,
-      isRealLocation: loc.isReal,
-      imageSource: 'simulated',
-    );
-  }
-
   Future<DetectionResult> processImage(String imagePath, String source) async {
     final loc = await getCurrentLocation();
     final address = loc.isReal
@@ -238,8 +193,8 @@ class DetectionService {
       final List<DetectionBox> sourceBoxes = tfliteResult.detections.isNotEmpty
           ? tfliteResult.detections
           : (tfliteResult.bestCandidate != null
-              ? [tfliteResult.bestCandidate!]
-              : <DetectionBox>[]);
+                ? [tfliteResult.bestCandidate!]
+                : <DetectionBox>[]);
 
       final List<DetectedHazard> hazards = sourceBoxes.map((box) {
         return DetectedHazard(
@@ -292,10 +247,12 @@ class DetectionService {
         notes: notes,
         imagePath: permanentPath,
         detections: hazards,
-        imageWidth:
-            tfliteResult.imageWidth > 0 ? tfliteResult.imageWidth : null,
-        imageHeight:
-            tfliteResult.imageHeight > 0 ? tfliteResult.imageHeight : null,
+        imageWidth: tfliteResult.imageWidth > 0
+            ? tfliteResult.imageWidth
+            : null,
+        imageHeight: tfliteResult.imageHeight > 0
+            ? tfliteResult.imageHeight
+            : null,
       );
     } else {
       // Model completed inference but found no damage: report clean road honestly
@@ -317,10 +274,12 @@ class DetectionService {
             'Inference completed in ${tfliteResult.inferenceTimeMs}ms. No potholes or cracks detected on road surface.',
         imagePath: permanentPath,
         detections: const [],
-        imageWidth:
-            tfliteResult.imageWidth > 0 ? tfliteResult.imageWidth : null,
-        imageHeight:
-            tfliteResult.imageHeight > 0 ? tfliteResult.imageHeight : null,
+        imageWidth: tfliteResult.imageWidth > 0
+            ? tfliteResult.imageWidth
+            : null,
+        imageHeight: tfliteResult.imageHeight > 0
+            ? tfliteResult.imageHeight
+            : null,
       );
     }
 
@@ -339,11 +298,11 @@ class DetectionService {
     final totalArea = hazards.fold(0.0, (sum, h) => sum + h.areaFraction);
     final count = hazards.length;
 
-    if (count >= 3 || totalArea > 0.18 || maxConf > 0.82) {
+    if (count >= 3 || totalArea > 0.2 || maxConf > 0.80) {
       return 'Critical';
-    } else if (count >= 2 || totalArea > 0.08 || maxConf > 0.60) {
+    } else if (count >= 2 || totalArea > 0.1 || maxConf > 0.60) {
       return 'High';
-    } else if (totalArea > 0.03 || maxConf > 0.40) {
+    } else if (totalArea > 0.05 || maxConf > 0.40) {
       return 'Medium';
     } else {
       return 'Low';

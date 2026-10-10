@@ -574,10 +574,14 @@ class _CapturesScreenState extends State<CapturesScreen> {
                             vertical: 1.5,
                           ),
                           decoration: BoxDecoration(
-                            color: AppTheme.accentOrange.withValues(alpha: 0.12),
+                            color: AppTheme.accentOrange.withValues(
+                              alpha: 0.12,
+                            ),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: AppTheme.accentOrange.withValues(alpha: 0.3),
+                              color: AppTheme.accentOrange.withValues(
+                                alpha: 0.3,
+                              ),
                               width: 0.8,
                             ),
                           ),
@@ -715,19 +719,6 @@ class _CapturesScreenState extends State<CapturesScreen> {
                   // Header Info
                   Row(
                     children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: damageColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          AppTheme.getDamageTypeIcon(report.damageType),
-                          color: damageColor,
-                          size: 22,
-                        ),
-                      ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
@@ -827,8 +818,8 @@ class _CapturesScreenState extends State<CapturesScreen> {
                           report.hasMultipleDefects
                               ? '${report.defectCount} detected'
                               : (report.boundingBox != null
-                                  ? '${(report.boundingBox!.width * report.boundingBox!.height * 100).toStringAsFixed(1)}%'
-                                  : 'Detected'),
+                                    ? '${(report.boundingBox!.width * report.boundingBox!.height * 100).toStringAsFixed(1)}%'
+                                    : 'Detected'),
                           report.hasMultipleDefects
                               ? Icons.grid_view_rounded
                               : Icons.aspect_ratio_rounded,
@@ -878,13 +869,16 @@ class _CapturesScreenState extends State<CapturesScreen> {
                         border: Border.all(color: AppTheme.borderLight),
                       ),
                       child: Column(
-                        children: List.generate(report.detections.length, (idx) {
+                        children: List.generate(report.detections.length, (
+                          idx,
+                        ) {
                           final hazard = report.detections[idx];
                           final isLast = idx == report.detections.length - 1;
-                          final hColor =
-                              AppTheme.getDamageTypeColor(hazard.label);
-                          final areaPercent =
-                              (hazard.areaFraction * 100).toStringAsFixed(1);
+                          final hColor = AppTheme.getDamageTypeColor(
+                            hazard.label,
+                          );
+                          final areaPercent = (hazard.areaFraction * 100)
+                              .toStringAsFixed(1);
 
                           return Column(
                             children: [
@@ -940,7 +934,8 @@ class _CapturesScreenState extends State<CapturesScreen> {
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                          color: AppTheme.borderLight),
+                                        color: AppTheme.borderLight,
+                                      ),
                                     ),
                                     child: Text(
                                       '${(hazard.confidence * 100).toInt()}% Conf.',
@@ -957,7 +952,9 @@ class _CapturesScreenState extends State<CapturesScreen> {
                                 const Padding(
                                   padding: EdgeInsets.symmetric(vertical: 8),
                                   child: Divider(
-                                      height: 1, color: AppTheme.borderLight),
+                                    height: 1,
+                                    color: AppTheme.borderLight,
+                                  ),
                                 ),
                             ],
                           );
@@ -969,7 +966,7 @@ class _CapturesScreenState extends State<CapturesScreen> {
 
                   // Location Details
                   const Text(
-                    'Location & GPS Tag',
+                    'Location & GPS',
                     style: TextStyle(
                       color: AppTheme.textPrimary,
                       fontSize: 14,
@@ -1068,7 +1065,7 @@ class _CapturesScreenState extends State<CapturesScreen> {
                   // AI Inspection Notes
                   if (report.notes != null) ...[
                     const Text(
-                      'AI Recommendation & Notes',
+                      'Model Notes',
                       style: TextStyle(
                         color: AppTheme.textPrimary,
                         fontSize: 14,

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 
 /// Represents a single road damage hazard detected by the YOLO model.
@@ -163,6 +164,12 @@ class DamageReport {
     };
   }
 
+  Map<String, dynamic> toDatabaseMap() {
+    final map = toMap();
+    map['detections'] = jsonEncode(detections.map((d) => d.toMap()).toList());
+    return map;
+  }
+
   factory DamageReport.fromMap(Map<String, dynamic> map) {
     Rect? box;
     if (map['bbox_left'] != null &&
@@ -178,11 +185,22 @@ class DamageReport {
     }
 
     List<DetectedHazard> detectionsList = [];
-    if (map['detections'] != null && map['detections'] is List) {
-      detectionsList = (map['detections'] as List)
-          .map((item) =>
-              DetectedHazard.fromMap(Map<String, dynamic>.from(item as Map)))
-          .toList();
+    if (map['detections'] != null) {
+      if (map['detections'] is String && (map['detections'] as String).isNotEmpty) {
+        try {
+          final decoded = jsonDecode(map['detections'] as String);
+          if (decoded is List) {
+            detectionsList = decoded
+                .map((item) => DetectedHazard.fromMap(Map<String, dynamic>.from(item as Map)))
+                .toList();
+          }
+        } catch (_) {}
+      } else if (map['detections'] is List) {
+        detectionsList = (map['detections'] as List)
+            .map((item) =>
+                DetectedHazard.fromMap(Map<String, dynamic>.from(item as Map)))
+            .toList();
+      }
     } else if (box != null) {
       detectionsList = [
         DetectedHazard(

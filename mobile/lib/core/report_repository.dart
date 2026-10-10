@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
+import 'database_service.dart';
 import 'models.dart';
 
 /// Repository managing reports, alerts, user stats, and app settings.
@@ -8,8 +9,12 @@ import 'models.dart';
 class ReportRepository extends ChangeNotifier {
   static final ReportRepository instance = ReportRepository._internal();
 
+  bool _isInitialized = false;
+  bool get isInitialized => _isInitialized;
+
   ReportRepository._internal() {
     _initializeSampleData();
+    init();
   }
 
   late List<DamageReport> _reports;
@@ -179,6 +184,77 @@ class ReportRepository extends ChangeNotifier {
     _recalculateStats();
   }
 
+  /// Hydrates the repository from the local SQLite database.
+  Future<void> init() async {
+    if (_isInitialized) return;
+    try {
+      final db = DatabaseService.instance;
+      final savedReports = await db.getAllReports();
+      final savedAlerts = await db.getAllAlerts();
+      final savedSettings = await db.getAllSettings();
+
+      if (savedReports.isNotEmpty) {
+        _reports = savedReports;
+      }
+
+      if (savedAlerts.isNotEmpty) {
+        _alerts = savedAlerts;
+      } else if (savedReports.isNotEmpty) {
+        // Synthesize alerts for active reports if none stored
+        _alerts = savedReports
+            .where((r) => r.status.toLowerCase() != 'resolved')
+            .map(
+              (r) => HazardAlert(
+                id: 'HZD-${r.id}',
+                title: '${r.severity} ${r.damageType}',
+                severity: r.severity,
+                distanceMeters: 0,
+                address: r.address,
+                damageType: r.damageType,
+                lastReported: r.timestamp,
+                latitude: r.latitude,
+                longitude: r.longitude,
+                isActive: true,
+              ),
+            )
+            .toList();
+      }
+
+      if (savedSettings.containsKey('alertRadius')) {
+        _alertRadius =
+            double.tryParse(savedSettings['alertRadius']!) ?? _alertRadius;
+      }
+      if (savedSettings.containsKey('soundAlertsEnabled')) {
+        _soundAlertsEnabled = savedSettings['soundAlertsEnabled'] == 'true';
+      }
+      if (savedSettings.containsKey('vibrationEnabled')) {
+        _vibrationEnabled = savedSettings['vibrationEnabled'] == 'true';
+      }
+      if (savedSettings.containsKey('pushNotificationsEnabled')) {
+        _pushNotificationsEnabled =
+            savedSettings['pushNotificationsEnabled'] == 'true';
+      }
+      if (savedSettings.containsKey('criticalOnlyAlerts')) {
+        _criticalOnlyAlerts = savedSettings['criticalOnlyAlerts'] == 'true';
+      }
+      if (savedSettings.containsKey('aiModel')) {
+        _aiModel = savedSettings['aiModel']!;
+      }
+      if (savedSettings.containsKey('autoGpsTagging')) {
+        _autoGpsTagging = savedSettings['autoGpsTagging'] == 'true';
+      }
+      if (savedSettings.containsKey('highResCapture')) {
+        _highResCapture = savedSettings['highResCapture'] == 'true';
+      }
+
+      _recalculateStats();
+      _isInitialized = true;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('[ReportRepository] Error initializing from database: $e');
+    }
+  }
+
   void _recalculateStats() {
     final resolvedCount =
         _reports.where((r) => r.status.toLowerCase() == 'resolved').length;
@@ -205,64 +281,78 @@ class ReportRepository extends ChangeNotifier {
   void setAlertRadius(double radius) {
     _alertRadius = radius.clamp(10.0, 500.0);
     notifyListeners();
+    DatabaseService.instance.saveSetting('alertRadius', _alertRadius.toString());
   }
 
   void toggleSoundAlerts(bool val) {
     _soundAlertsEnabled = val;
     notifyListeners();
+    DatabaseService.instance.saveSetting('soundAlertsEnabled', val.toString());
   }
 
   void toggleVibration(bool val) {
     _vibrationEnabled = val;
     notifyListeners();
+    DatabaseService.instance.saveSetting('vibrationEnabled', val.toString());
   }
 
   void togglePushNotifications(bool val) {
     _pushNotificationsEnabled = val;
     notifyListeners();
+    DatabaseService.instance
+        .saveSetting('pushNotificationsEnabled', val.toString());
   }
 
   void toggleCriticalOnly(bool val) {
     _criticalOnlyAlerts = val;
     notifyListeners();
+    DatabaseService.instance.saveSetting('criticalOnlyAlerts', val.toString());
   }
 
   void toggleAutoGps(bool val) {
     _autoGpsTagging = val;
     notifyListeners();
+    DatabaseService.instance.saveSetting('autoGpsTagging', val.toString());
   }
 
   void toggleHighRes(bool val) {
     _highResCapture = val;
     notifyListeners();
+    DatabaseService.instance.saveSetting('highResCapture', val.toString());
   }
 
   void setAiModel(String model) {
     _aiModel = model;
     notifyListeners();
+    DatabaseService.instance.saveSetting('aiModel', model);
   }
 
   Future<void> addReport(DamageReport report) async {
     _reports.insert(0, report);
+    HazardAlert? alert;
     if (report.status.toLowerCase() != 'resolved') {
-      _alerts.insert(
-        0,
-        HazardAlert(
-          id: 'HZD-${report.id}',
-          title: '${report.severity} ${report.damageType}',
-          severity: report.severity,
-          distanceMeters: 0,
-          address: report.address,
-          damageType: report.damageType,
-          lastReported: report.timestamp,
-          latitude: report.latitude,
-          longitude: report.longitude,
-          isActive: true,
-        ),
+      alert = HazardAlert(
+        id: 'HZD-${report.id}',
+        title: '${report.severity} ${report.damageType}',
+        severity: report.severity,
+        distanceMeters: 0,
+        address: report.address,
+        damageType: report.damageType,
+        lastReported: report.timestamp,
+        latitude: report.latitude,
+        longitude: report.longitude,
+        isActive: true,
       );
+      _alerts.insert(0, alert);
     }
     _recalculateStats();
     notifyListeners();
+
+    // Persist to local SQLite database
+    await DatabaseService.instance.insertReport(report);
+    if (alert != null) {
+      await DatabaseService.instance.insertAlert(alert);
+    }
   }
 
   void toggleResolve(String reportId) {
@@ -281,6 +371,13 @@ class ReportRepository extends ChangeNotifier {
       }
       _recalculateStats();
       notifyListeners();
+
+      // Persist to SQLite
+      DatabaseService.instance.updateReportStatus(reportId, newStatus);
+      if (alertIdx != -1) {
+        DatabaseService.instance
+            .updateAlertActive('HZD-$reportId', newStatus == 'detected');
+      }
     }
   }
 
@@ -289,6 +386,10 @@ class ReportRepository extends ChangeNotifier {
     _alerts.removeWhere((a) => a.id == 'HZD-$reportId');
     _recalculateStats();
     notifyListeners();
+
+    // Persist to SQLite
+    DatabaseService.instance.deleteReport(reportId);
+    DatabaseService.instance.deleteAlert('HZD-$reportId');
   }
 
   void clearAllReports() {
@@ -296,5 +397,9 @@ class ReportRepository extends ChangeNotifier {
     _alerts.clear();
     _recalculateStats();
     notifyListeners();
+
+    // Persist to SQLite
+    DatabaseService.instance.clearAllReports();
+    DatabaseService.instance.clearAllAlerts();
   }
 }

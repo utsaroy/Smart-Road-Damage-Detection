@@ -1,17 +1,21 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart' hide Path;
 
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/report_repository.dart';
 import '../core/location_service.dart';
+import '../core/compass_service.dart';
+import '../core/alert_service.dart';
 import '../widgets/jelly_badge.dart';
+import '../widgets/heading_cone_painter.dart';
 import 'full_screen_map.dart';
 import 'profile_screen.dart';
 
@@ -31,6 +35,11 @@ class _HomeScreenState extends State<HomeScreen>
   late Animation<double> _pulseAnimation;
   LatLng _userLocation = LocationService.instance.lastKnownLocation;
   StreamSubscription<Position>? _positionSub;
+  StreamSubscription<double>? _compassSub;
+  double _currentCompassHeading = CompassService.instance.currentHeading;
+  String? _lastAlertedHazardId;
+  DateTime? _lastAlertTime;
+
   String _selectedCategory = 'All';
   bool _radarActive = true;
   final String _searchQuery = '';
@@ -48,7 +57,18 @@ class _HomeScreenState extends State<HomeScreen>
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
 
+    _initCompass();
     _initUserLocation();
+  }
+
+  void _initCompass() {
+    CompassService.instance.start();
+    _currentCompassHeading = CompassService.instance.currentHeading;
+    _compassSub = CompassService.instance.headingStream.listen((heading) {
+      if (mounted) {
+        setState(() => _currentCompassHeading = heading);
+      }
+    });
   }
 
   Future<void> _initUserLocation() async {
@@ -68,9 +88,12 @@ class _HomeScreenState extends State<HomeScreen>
         pos,
       ) {
         if (mounted) {
+          final newLoc = LatLng(pos.latitude, pos.longitude);
           setState(() {
-            _userLocation = LatLng(pos.latitude, pos.longitude);
+            _userLocation = newLoc;
           });
+          CompassService.instance.updateFromGpsCourse(pos.heading, pos.speed);
+          _checkProximityHazards(newLoc, ReportRepository.instance);
         }
       });
     } catch (e) {
@@ -78,9 +101,45 @@ class _HomeScreenState extends State<HomeScreen>
     }
   }
 
+  void _checkProximityHazards(LatLng userLoc, ReportRepository repo) {
+    if (!_radarActive) return;
+
+    final alerts = repo.alertsInRadius;
+    if (alerts.isEmpty) return;
+
+    final activeHazards = alerts.where((a) => a.isActive).toList();
+    if (activeHazards.isEmpty) return;
+
+    activeHazards.sort((a, b) => a.distanceMeters.compareTo(b.distanceMeters));
+    final closest = activeHazards.first;
+
+    if (repo.criticalOnlyAlerts &&
+        closest.severity != 'Critical' &&
+        closest.severity != 'High') {
+      return;
+    }
+
+    final now = DateTime.now();
+    if (_lastAlertedHazardId != closest.id ||
+        _lastAlertTime == null ||
+        now.difference(_lastAlertTime!).inSeconds > 25) {
+      _lastAlertedHazardId = closest.id;
+      _lastAlertTime = now;
+
+      AlertService.triggerAlert(
+        sound: repo.soundAlertsEnabled,
+        vibrate: repo.vibrationEnabled,
+        notification: repo.pushNotificationsEnabled,
+        title: '${closest.severity} ${closest.damageType} Alert',
+        message: '${closest.distanceMeters.toInt()}m away',
+      );
+    }
+  }
+
   @override
   void dispose() {
     _positionSub?.cancel();
+    _compassSub?.cancel();
     _pulseController.dispose();
     _mapController.dispose();
     super.dispose();
@@ -477,51 +536,79 @@ class _HomeScreenState extends State<HomeScreen>
                       ),
                     MarkerLayer(
                       markers: [
-                        // Current User Marker
+                        // Current User Marker (Rotates with phone compass direction)
                         Marker(
                           point: displayCenter,
                           width: 50,
                           height: 50,
                           child: AnimatedBuilder(
                             animation: _pulseAnimation,
-                            builder: (context, _) => Stack(
-                              alignment: Alignment.center,
-                              children: [
-                                Container(
-                                  width: 44 * _pulseAnimation.value,
-                                  height: 44 * _pulseAnimation.value,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.blue.withValues(alpha: 0.15),
-                                    border: Border.all(
-                                      color: Colors.blue.withValues(alpha: 0.4),
-                                      width: 1.2,
+                            builder: (context, _) {
+                              final angleRad =
+                                  (_currentCompassHeading - 90.0) *
+                                  (math.pi / 180.0);
+                              return Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  // Directional vision beam radiating in phone's direction
+                                  CustomPaint(
+                                    size: const Size(50, 50),
+                                    painter: HeadingConePainter(
+                                      color: Colors.blueAccent,
+                                      angleRadians: angleRad,
                                     ),
                                   ),
-                                ),
-                                Container(
-                                  width: 14,
-                                  height: 14,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.blue,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 2.5,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.blue.withValues(
-                                          alpha: 0.6,
-                                        ),
-                                        blurRadius: 8,
-                                        spreadRadius: 2,
+                                  Container(
+                                    width: 44 * _pulseAnimation.value,
+                                    height: 44 * _pulseAnimation.value,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.blue.withValues(
+                                        alpha: 0.15,
                                       ),
-                                    ],
+                                      border: Border.all(
+                                        color: Colors.blue.withValues(
+                                          alpha: 0.4,
+                                        ),
+                                        width: 1.2,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
+                                  // Blue center dot with rotating directional arrow
+                                  Transform.rotate(
+                                    angle: angleRad + (math.pi / 2.0),
+                                    child: Container(
+                                      width: 16,
+                                      height: 16,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: Colors.blueAccent,
+                                        border: Border.all(
+                                          color: Colors.white,
+                                          width: 2.0,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.blue.withValues(
+                                              alpha: 0.6,
+                                            ),
+                                            blurRadius: 8,
+                                            spreadRadius: 2,
+                                          ),
+                                        ],
+                                      ),
+                                      child: const Center(
+                                        child: Icon(
+                                          Icons.navigation,
+                                          size: 8.5,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
                           ),
                         ),
                         // Real Hazard & Detection Pins (Perpendicular pin with ground disc)
@@ -607,40 +694,77 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
               ),
 
-              // Radius badge on map
+              // Radius and Live Compass badge on map
               Positioned(
                 bottom: 10,
                 left: 10,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.95),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.borderMedium),
-                    boxShadow: AppTheme.cardShadow,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.track_changes,
-                        size: 12,
-                        color: AppTheme.aiLavender,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 5,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Radar: ${repo.alertRadius.toInt()}m',
-                        style: const TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                        ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.95),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.borderMedium),
+                        boxShadow: AppTheme.cardShadow,
                       ),
-                    ],
-                  ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.track_changes,
+                            size: 12,
+                            color: AppTheme.aiLavender,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Radar: ${repo.alertRadius.toInt()}m',
+                            style: const TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.95),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.borderMedium),
+                        boxShadow: AppTheme.cardShadow,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.navigation_rounded,
+                            size: 11,
+                            color: Colors.blueAccent,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${_currentCompassHeading.toInt()}° ${CompassService.getHeadingCardinal(_currentCompassHeading)}',
+                            style: const TextStyle(
+                              color: AppTheme.textPrimary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
@@ -911,26 +1035,6 @@ class _HomeScreenState extends State<HomeScreen>
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (hazard.isUserCapture)
-                        Container(
-                          margin: const EdgeInsets.only(left: 6),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppTheme.obsidianBlack,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text(
-                            'YOU',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 8.5,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
                     ],
                   ),
                   const SizedBox(height: 3),

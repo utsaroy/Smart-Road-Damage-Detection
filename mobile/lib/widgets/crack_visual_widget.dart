@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+
 import '../core/theme.dart';
 import '../core/models.dart';
 
@@ -82,7 +84,9 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
 
   void _toggleFit() {
     setState(() {
-      _currentFit = _currentFit == BoxFit.contain ? BoxFit.cover : BoxFit.contain;
+      _currentFit = _currentFit == BoxFit.contain
+          ? BoxFit.cover
+          : BoxFit.contain;
     });
   }
 
@@ -104,7 +108,8 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final hasRealImage = widget.report.imagePath != null &&
+    final hasRealImage =
+        widget.report.imagePath != null &&
         widget.report.imagePath!.isNotEmpty &&
         File(widget.report.imagePath!).existsSync();
 
@@ -119,7 +124,9 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
         decoration: BoxDecoration(
           color: const Color(0xFF0D1219),
           border: Border.all(
-            color: severityColor.withValues(alpha: widget.isThumbnail ? 0.2 : 0.4),
+            color: severityColor.withValues(
+              alpha: widget.isThumbnail ? 0.2 : 0.4,
+            ),
             width: 1,
           ),
         ),
@@ -151,11 +158,16 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
                 top: 10,
                 left: 10,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black87,
                     borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: damageColor.withValues(alpha: 0.6)),
+                    border: Border.all(
+                      color: damageColor.withValues(alpha: 0.6),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -170,7 +182,7 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        'AI DETECT: ${widget.report.damageType.toUpperCase()}',
+                        'DETECTED: ${widget.report.damageType.toUpperCase()}',
                         style: TextStyle(
                           color: damageColor,
                           fontSize: 10,
@@ -199,7 +211,10 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
                         onTap: _toggleFit,
                         borderRadius: BorderRadius.circular(6),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(color: Colors.white24),
@@ -260,7 +275,10 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
                 bottom: 10,
                 right: 10,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black87,
                     borderRadius: BorderRadius.circular(6),
@@ -302,14 +320,14 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
     final detections = widget.report.detections.isNotEmpty
         ? widget.report.detections
         : (widget.report.boundingBox != null
-            ? [
-                DetectedHazard(
-                  rect: widget.report.boundingBox!,
-                  confidence: widget.report.confidenceScore,
-                  label: widget.report.damageType,
-                ),
-              ]
-            : <DetectedHazard>[]);
+              ? [
+                  DetectedHazard(
+                    rect: widget.report.boundingBox!,
+                    confidence: widget.report.confidenceScore,
+                    label: widget.report.damageType,
+                  ),
+                ]
+              : <DetectedHazard>[]);
 
     if (detections.isEmpty) return const SizedBox.shrink();
 
@@ -327,8 +345,10 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
               _imageHeight != null &&
               _imageWidth! > 0 &&
               _imageHeight! > 0) {
-            final imageSize =
-                Size(_imageWidth!.toDouble(), _imageHeight!.toDouble());
+            final imageSize = Size(
+              _imageWidth!.toDouble(),
+              _imageHeight!.toDouble(),
+            );
             final fitted = applyBoxFit(_currentFit, imageSize, containerSize);
 
             final sourceRect = Alignment.center.inscribe(
@@ -343,9 +363,11 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
             final scaleX = destinationRect.width / sourceRect.width;
             final scaleY = destinationRect.height / sourceRect.height;
 
-            final boxLeft = destinationRect.left +
+            final boxLeft =
+                destinationRect.left +
                 (rawRect.left * imageSize.width - sourceRect.left) * scaleX;
-            final boxTop = destinationRect.top +
+            final boxTop =
+                destinationRect.top +
                 (rawRect.top * imageSize.height - sourceRect.top) * scaleY;
             final boxWidth = (rawRect.width * imageSize.width) * scaleX;
             final boxHeight = (rawRect.height * imageSize.height) * scaleY;
@@ -382,10 +404,7 @@ class _CrackVisualWidgetState extends State<CrackVisualWidget> {
           );
         }
 
-        return Stack(
-          clipBehavior: Clip.none,
-          children: boxWidgets,
-        );
+        return Stack(clipBehavior: Clip.none, children: boxWidgets);
       },
     );
   }
@@ -409,14 +428,14 @@ class _FullScreenDamageViewer extends StatelessWidget {
     final detections = report.detections.isNotEmpty
         ? report.detections
         : (report.boundingBox != null
-            ? [
-                DetectedHazard(
-                  rect: report.boundingBox!,
-                  confidence: report.confidenceScore,
-                  label: report.damageType,
-                ),
-              ]
-            : <DetectedHazard>[]);
+              ? [
+                  DetectedHazard(
+                    rect: report.boundingBox!,
+                    confidence: report.confidenceScore,
+                    label: report.damageType,
+                  ),
+                ]
+              : <DetectedHazard>[]);
 
     final titleText = report.hasMultipleDefects
         ? '${report.defectCount} Hazards Inspection'
@@ -464,14 +483,19 @@ class _FullScreenDamageViewer extends StatelessWidget {
           maxScale: 5.0,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final containerSize =
-                  Size(constraints.maxWidth, constraints.maxHeight);
+              final containerSize = Size(
+                constraints.maxWidth,
+                constraints.maxHeight,
+              );
               final imgW = (imageWidth ?? 640).toDouble();
               final imgH = (imageHeight ?? 640).toDouble();
               final imageSize = Size(imgW, imgH);
 
-              final fitted =
-                  applyBoxFit(BoxFit.contain, imageSize, containerSize);
+              final fitted = applyBoxFit(
+                BoxFit.contain,
+                imageSize,
+                containerSize,
+              );
               final destinationRect = Alignment.center.inscribe(
                 fitted.destination,
                 Offset.zero & containerSize,
@@ -496,9 +520,11 @@ class _FullScreenDamageViewer extends StatelessWidget {
 
                 stackChildren.add(
                   Positioned(
-                    left: destinationRect.left +
+                    left:
+                        destinationRect.left +
                         rawRect.left * destinationRect.width,
-                    top: destinationRect.top +
+                    top:
+                        destinationRect.top +
                         rawRect.top * destinationRect.height,
                     width: rawRect.width * destinationRect.width,
                     height: rawRect.height * destinationRect.height,
@@ -513,9 +539,7 @@ class _FullScreenDamageViewer extends StatelessWidget {
                 );
               }
 
-              return Stack(
-                children: stackChildren,
-              );
+              return Stack(children: stackChildren);
             },
           ),
         ),
@@ -683,11 +707,7 @@ class _CornerBracketPainter extends CustomPainter {
   final String tag;
   final String? label;
 
-  _CornerBracketPainter({
-    required this.color,
-    required this.tag,
-    this.label,
-  });
+  _CornerBracketPainter({required this.color, required this.tag, this.label});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -732,16 +752,40 @@ class _CornerBracketPainter extends CustomPainter {
     canvas.drawLine(const Offset(0, 0), Offset(0, len), cornerPaint);
 
     // Top-Right
-    canvas.drawLine(Offset(size.width, 0), Offset(size.width - len, 0), cornerPaint);
-    canvas.drawLine(Offset(size.width, 0), Offset(size.width, len), cornerPaint);
+    canvas.drawLine(
+      Offset(size.width, 0),
+      Offset(size.width - len, 0),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width, 0),
+      Offset(size.width, len),
+      cornerPaint,
+    );
 
     // Bottom-Left
-    canvas.drawLine(Offset(0, size.height), Offset(len, size.height), cornerPaint);
-    canvas.drawLine(Offset(0, size.height), Offset(0, size.height - len), cornerPaint);
+    canvas.drawLine(
+      Offset(0, size.height),
+      Offset(len, size.height),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(0, size.height),
+      Offset(0, size.height - len),
+      cornerPaint,
+    );
 
     // Bottom-Right
-    canvas.drawLine(Offset(size.width, size.height), Offset(size.width - len, size.height), cornerPaint);
-    canvas.drawLine(Offset(size.width, size.height), Offset(size.width, size.height - len), cornerPaint);
+    canvas.drawLine(
+      Offset(size.width, size.height),
+      Offset(size.width - len, size.height),
+      cornerPaint,
+    );
+    canvas.drawLine(
+      Offset(size.width, size.height),
+      Offset(size.width, size.height - len),
+      cornerPaint,
+    );
 
     // 4. Pill badge label
     final tagText = label != null ? '$label $tag' : tag;
@@ -773,5 +817,7 @@ class _CornerBracketPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CornerBracketPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.tag != tag || oldDelegate.label != label;
+      oldDelegate.color != color ||
+      oldDelegate.tag != tag ||
+      oldDelegate.label != label;
 }

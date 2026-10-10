@@ -7,6 +7,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/report_repository.dart';
+import '../core/alert_service.dart';
 import '../widgets/section_header.dart';
 import '../widgets/jelly_badge.dart';
 
@@ -1052,8 +1053,8 @@ class ProfileScreen extends StatelessWidget {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            icon: const Icon(Icons.volume_up_rounded, size: 16),
-            label: const Text('Test Proximity Alert (Haptic & Audio)'),
+            icon: const Icon(Icons.volume_up_rounded, size: 20),
+            label: const Text('Test Proximity Alert'),
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 12),
               foregroundColor: AppTheme.obsidianBlack,
@@ -1062,17 +1063,41 @@ class ProfileScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
               ),
             ),
-            onPressed: () {
-              HapticFeedback.heavyImpact();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text(
-                    '⚠️ Alert Test Triggered: Hazard Warning System active!',
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                  duration: Duration(seconds: 2),
-                ),
+            onPressed: () async {
+              final sound = repo.soundAlertsEnabled;
+              final vibrate = repo.vibrationEnabled;
+              final push = repo.pushNotificationsEnabled;
+
+              final allOff = !sound && !vibrate && !push;
+              final willPlaySound = sound || allOff;
+              final willVibrate = vibrate || allOff;
+              final willPush = push || allOff;
+
+              await AlertService.triggerAlert(
+                sound: willPlaySound,
+                vibrate: willVibrate,
+                notification: willPush,
+                title: 'Road Hazard Alert (Test)',
+                message:
+                    'Proximity detection active. Pothole detected 50m ahead.',
               );
+
+              if (context.mounted) {
+                final channels = [
+                  if (willPlaySound) 'Sound',
+                  if (willVibrate) 'Vibration',
+                  if (willPush) 'Push Notification',
+                ].join(' + ');
+
+                ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Alert Triggered: $channels operational!'),
+                    behavior: SnackBarBehavior.floating,
+                    duration: const Duration(seconds: 3),
+                  ),
+                );
+              }
             },
           ),
         ),
@@ -1134,7 +1159,7 @@ class ProfileScreen extends StatelessWidget {
                     ),
                     SizedBox(height: 2),
                     Text(
-                      'Pre-trained Mobile Detector (12.4 MB)',
+                      'Pre-trained Model(12.4 MB)',
                       style: TextStyle(
                         color: AppTheme.textSecondary,
                         fontSize: 11,
@@ -1218,7 +1243,7 @@ class ProfileScreen extends StatelessWidget {
                     Expanded(
                       child: _buildSpecItem(
                         label: 'Classes',
-                        value: '4 damage types',
+                        value: '1 damage types',
                         icon: Icons.category_rounded,
                       ),
                     ),
@@ -1226,41 +1251,6 @@ class ProfileScreen extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-
-          const SizedBox(height: 12),
-
-          // Supported Class labels chips
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children:
-                const [
-                  'Pothole',
-                  'Longitudinal Crack',
-                  'Transverse Crack',
-                  'Alligator Crack',
-                ].map((name) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: AppTheme.borderMedium),
-                    ),
-                    child: Text(
-                      name,
-                      style: const TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.textPrimary,
-                      ),
-                    ),
-                  );
-                }).toList(),
           ),
         ],
       ),
