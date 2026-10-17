@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 import 'database_service.dart';
 import 'models.dart';
+import 'report_sync_service.dart';
 
 /// Repository managing reports, alerts, user stats, and app settings.
 /// Uses in-memory state with ChangeNotifier for reactive UI updates across screens.
@@ -250,6 +251,11 @@ class ReportRepository extends ChangeNotifier {
       _recalculateStats();
       _isInitialized = true;
       notifyListeners();
+
+      // Initialize sync service and sync any offline pending captures
+      ReportSyncService.instance.init().then((_) {
+        ReportSyncService.instance.syncAllLocalReports();
+      });
     } catch (e) {
       debugPrint('[ReportRepository] Error initializing from database: $e');
     }
@@ -353,6 +359,9 @@ class ReportRepository extends ChangeNotifier {
     if (alert != null) {
       await DatabaseService.instance.insertAlert(alert);
     }
+
+    // Automatically sync with central website database in real time
+    ReportSyncService.instance.uploadDamageReport(report);
   }
 
   void toggleResolve(String reportId) {

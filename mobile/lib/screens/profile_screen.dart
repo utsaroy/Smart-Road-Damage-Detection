@@ -8,6 +8,7 @@ import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/report_repository.dart';
 import '../core/alert_service.dart';
+import '../core/report_sync_service.dart';
 import '../widgets/section_header.dart';
 import '../widgets/jelly_badge.dart';
 
@@ -1302,6 +1303,37 @@ class ProfileScreen extends StatelessWidget {
   Widget _buildSystemSettingsSection(BuildContext context) {
     return Column(
       children: [
+        _buildMenuTile(
+          icon: Icons.cloud_sync_outlined,
+          title: 'Authority Database Sync',
+          subtitle: ReportSyncService.instance.serverBaseUrl,
+          trailing: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              minimumSize: const Size(60, 32),
+              backgroundColor: AppTheme.accentIndigo,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () async {
+              HapticFeedback.mediumImpact();
+              final count = await ReportSyncService.instance.syncAllLocalReports();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Synced $count detection(s) to website database.'),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            },
+            child: const Text('Sync', style: TextStyle(fontSize: 11)),
+          ),
+        ),
+        const SizedBox(height: 8),
+
         _buildMenuTile(
           icon: Icons.storage_outlined,
           title: 'Stored Inspections',
