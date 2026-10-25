@@ -45,6 +45,9 @@ require_once __DIR__ . '/../config/database.php';
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
+    <!-- Supabase Cloud Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="assets/css/style.css?v=<?= time() ?>">
 </head>

@@ -13,7 +13,7 @@ let currentFilter = {
 document.addEventListener('DOMContentLoaded', () => {
     initHazardMap();
     loadHazardsData();
-    // realtime initialized in next phase
+    initSupabaseRealtime();
 
     // Search input listener
     const searchInput = document.getElementById('search-input');
@@ -589,4 +589,37 @@ function showToast(msg) {
     setTimeout(() => {
         toast.remove();
     }, 3500);
+}
+
+
+// Supabase Cloud Real-time Live Synchronization
+const SUPABASE_CONFIG = {
+    url: 'https://dytilqslhxmlhrwselam.supabase.co',
+    key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5dGlscXNsaHhtbGhyd3NlbGFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5NDE5MDIsImV4cCI6MjEwODUxNzkwMn0.NHMeba85rqFXLO7UAnLqAT_j9J50Y-mwqRVpiVV59Uk'
+};
+
+let supabaseClient = null;
+
+function initSupabaseRealtime() {
+    if (window.supabase) {
+        try {
+            supabaseClient = window.supabase.createClient(SUPABASE_CONFIG.url, SUPABASE_CONFIG.key);
+            supabaseClient
+                .channel('public:damage_reports')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'damage_reports' }, (payload) => {
+                    console.log('Realtime database event from mobile sync:', payload);
+                    if (payload.eventType === 'INSERT') {
+                        showToast(`📡 Live Capture: ${payload.new.reported_by || 'Citizen'} uploaded ${payload.new.damage_type || 'a road defect'}`);
+                    } else if (payload.eventType === 'UPDATE') {
+                        showToast(`📝 Defect ${payload.new.id} status updated to ${payload.new.status}`);
+                    }
+                    loadHazardsData();
+                })
+                .subscribe((status) => {
+                    console.log('Supabase Realtime Channel Status:', status);
+                });
+        } catch (e) {
+            console.warn('Supabase realtime init error:', e);
+        }
+    }
 }
