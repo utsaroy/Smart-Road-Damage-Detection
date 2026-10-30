@@ -1,6 +1,6 @@
 <?php
 /**
- * Common Header for Road Authority Portal - AmarPath
+ * Common Header for Road Authority Portal - SorokSurokkha
  * Professional Civic & Municipal Light Design
  */
 require_once __DIR__ . '/../config/database.php';
@@ -56,14 +56,14 @@ require_once __DIR__ . '/../config/database.php';
     <!-- Top Administrative Header -->
     <header class="sticky top-0 z-50 bg-white border-b border-slate-200/90 shadow-xs">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
+            <div class="flex items-center justify-between h-20">
                 
                 <!-- Logo & Civic Title -->
                 <div class="flex items-center gap-3.5">
-                    <img src="assets/images/logo.png" alt="AmarPath Logo" class="w-9 h-9 object-contain">
+                    <img src="assets/images/logo.png" alt="SorokSurokkha Logo" class="w-13 h-13 sm:w-14 sm:h-14 object-contain">
                     <div class="flex flex-col">
                         <div class="flex items-center gap-2">
-                            <span class="text-lg font-extrabold text-slate-900 tracking-tight">AmarPath</span>
+                            <span class="text-xl font-extrabold text-slate-900 tracking-tight">SorokSurokkha</span>
                             <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200">
                                 Road Authority
                             </span>

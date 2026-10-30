@@ -1,9 +1,9 @@
 <?php
 /**
- * AmarPath - Configuration & Supabase Connection Details
+ * SorokSurokkha - Configuration & Supabase Connection Details
  */
 
-define('APP_NAME', 'AmarPath');
+define('APP_NAME', 'SorokSurokkha');
 define('BASE_PATH', dirname(__DIR__));
 define('DATA_DIR', BASE_PATH . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR);
 define('DB_FILE', DATA_DIR . 'potholes.sqlite');

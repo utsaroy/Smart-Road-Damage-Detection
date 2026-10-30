@@ -61,7 +61,7 @@ class Database {
         ";
         $pdo->exec($sql);
 
-        // Safe column additions for amar_path Android Flutter app schema alignment
+        // Safe column additions for sorok_surokkha Android Flutter app schema alignment
         $cols = [
             "damage_type TEXT DEFAULT 'Pothole'",
             "address TEXT",
@@ -75,6 +75,8 @@ class Database {
             "image_width INTEGER",
             "image_height INTEGER",
             "detections_json TEXT",
+            "division TEXT",
+            "upazilla TEXT",
             "user_name TEXT DEFAULT 'App User'",
             "device_model TEXT DEFAULT 'Android Device'"
         ];

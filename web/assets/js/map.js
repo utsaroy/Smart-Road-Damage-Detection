@@ -558,6 +558,19 @@ function flyToReport(reportId) {
     }
 }
 
+function flyToUpazillaLocation(lat, lng, upazillaName) {
+    if (!hazardMap || !lat || !lng) return;
+    userHasInteracted = true;
+    hazardMap.flyTo([lat, lng], 14.5, { animate: true, duration: 1.0 });
+    const mapSection = document.getElementById('hazard-map');
+    if (mapSection) {
+        mapSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (typeof showToast === 'function') {
+        showToast('📍 Focused GIS Map on ' + upazillaName + ' Upazilla cluster.');
+    }
+}
+
 function getSeverityBadgeClass(severity) {
     switch ((severity || '').toUpperCase()) {
         case 'CRITICAL': return 'bg-rose-50 text-rose-700 border border-rose-200';

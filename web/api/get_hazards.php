@@ -8,12 +8,16 @@ header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/../includes/geo_helper.php';
 
 try {
     $db = Database::getConnection();
 
     $status_filter = strtolower(trim($_GET['status'] ?? 'all'));
     $severity_filter = strtoupper(trim($_GET['severity'] ?? 'ALL'));
+    $division_filter = trim($_GET['division'] ?? 'all');
+    $district_filter = trim($_GET['district'] ?? 'all');
+    $upazilla_filter = trim($_GET['upazilla'] ?? 'all');
     $search = trim($_GET['search'] ?? '');
 
     $supabase_reports = [];
@@ -48,10 +52,12 @@ try {
         $upsert_stmt = $db->prepare("
             INSERT INTO pothole_reports (
                 id, title, severity, status, latitude, longitude, road_name,
+                division, district, upazilla,
                 confidence, defects_count, hazards_breakdown, image_url,
                 user_id, user_name, device_model, reported_at
             ) VALUES (
                 :id, :title, :severity, :status, :latitude, :longitude, :road_name,
+                :division, :district, :upazilla,
                 :confidence, :defects_count, :hazards_breakdown, :image_url,
                 :user_id, :user_name, :device_model, :reported_at
             )
@@ -61,6 +67,9 @@ try {
                 latitude = excluded.latitude,
                 longitude = excluded.longitude,
                 road_name = excluded.road_name,
+                division = excluded.division,
+                district = excluded.district,
+                upazilla = excluded.upazilla,
                 confidence = excluded.confidence,
                 defects_count = excluded.defects_count,
                 hazards_breakdown = excluded.hazards_breakdown,
@@ -112,6 +121,8 @@ try {
             $dev = 'Android YOLOv8 Mobile';
             $created = $sr['created_at'] ?? date('Y-m-d H:i:s');
 
+            $geoLoc = BangladeshGeo::resolveLocation($lat, $lng, $road);
+
             $upsert_stmt->execute([
                 ':id' => $rep_id,
                 ':title' => $title,
@@ -120,6 +131,9 @@ try {
                 ':latitude' => $lat,
                 ':longitude' => $lng,
                 ':road_name' => $road,
+                ':division' => $geoLoc['division'],
+                ':district' => $geoLoc['district'],
+                ':upazilla' => $geoLoc['upazilla'],
                 ':confidence' => $conf,
                 ':defects_count' => $def_count,
                 ':hazards_breakdown' => json_encode($breakdown),
@@ -165,8 +179,23 @@ try {
         $params[':severity'] = $severity_filter;
     }
 
+    if ($division_filter !== 'all' && !empty($division_filter)) {
+        $conditions[] = "LOWER(division) = :division";
+        $params[':division'] = strtolower($division_filter);
+    }
+
+    if ($district_filter !== 'all' && !empty($district_filter)) {
+        $conditions[] = "LOWER(district) = :district";
+        $params[':district'] = strtolower($district_filter);
+    }
+
+    if ($upazilla_filter !== 'all' && !empty($upazilla_filter)) {
+        $conditions[] = "LOWER(upazilla) = :upazilla";
+        $params[':upazilla'] = strtolower($upazilla_filter);
+    }
+
     if (!empty($search)) {
-        $conditions[] = "(id LIKE :search OR title LIKE :search OR road_name LIKE :search OR user_name LIKE :search)";
+        $conditions[] = "(id LIKE :search OR title LIKE :search OR road_name LIKE :search OR user_name LIKE :search OR upazilla LIKE :search OR district LIKE :search)";
         $params[':search'] = '%' . $search . '%';
     }
 
@@ -188,6 +217,9 @@ try {
         $r['latitude'] = floatval($r['latitude']);
         $r['longitude'] = floatval($r['longitude']);
         $r['confidence_pct'] = round(floatval($r['confidence']) * 100, 1);
+        $r['division'] = !empty($r['division']) ? $r['division'] : 'Khulna';
+        $r['district'] = !empty($r['district']) ? $r['district'] : 'Khulna';
+        $r['upazilla'] = !empty($r['upazilla']) ? $r['upazilla'] : 'Khan Jahan Ali';
         return $r;
     }, $reports);
 

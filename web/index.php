@@ -1,6 +1,6 @@
 <?php
 /**
- * AmarPath - Road Hazard & Pothole Management Portal
+ * SorokSurokkha - Road Hazard & Pothole Management Portal
  * Professional Civic & Municipal Light Design
  */
 require_once __DIR__ . '/config/database.php';
@@ -82,6 +82,188 @@ require_once __DIR__ . '/includes/header.php';
                 <span class="text-[11px] font-medium text-slate-400">citizens</span>
             </div>
         </div>
+    </section>
+
+    <!-- Upazilla-wise Pothole Density Ratio & Geographic Analytics Section -->
+    <section class="bg-white border border-slate-200/90 rounded-xl p-5 shadow-xs space-y-5">
+        
+        <!-- Header & Breadcrumb / Scope Indicator -->
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+            <div>
+                <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="pie-chart" class="w-4.5 h-4.5 text-sky-600"></i>
+                    <span>Upazilla Pothole Density Ratio & Hotspot Analytics</span>
+                </h2>
+                <p class="text-xs text-slate-500">Live density percentages calculated based on pothole locations in database to guide authority repair prioritization</p>
+            </div>
+
+            <!-- Total Scope Info Pill -->
+            <div class="flex items-center gap-3">
+                <div class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                    <i data-lucide="map-pin" class="w-4 h-4 text-rose-500"></i>
+                    <div>
+                        <div class="text-[10px] uppercase font-bold text-slate-400">Monitored Upazillas</div>
+                        <div id="stat-geo-upazillas-count" class="text-sm font-black text-slate-900">0</div>
+                    </div>
+                </div>
+                <div class="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                    <i data-lucide="alert-octagon" class="w-4 h-4 text-amber-500"></i>
+                    <div>
+                        <div class="text-[10px] uppercase font-bold text-slate-400">Total Hazards Analyzed</div>
+                        <div id="stat-geo-hazards-count" class="text-sm font-black text-slate-900">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Multi-tier Cascading Filter Bar: Division -> District -> Upazilla + Search -->
+        <div class="bg-slate-50/80 border border-slate-200/90 rounded-xl p-3.5 space-y-3">
+            <div class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <i data-lucide="filter" class="w-3.5 h-3.5 text-sky-600"></i>
+                <span>Hierarchical Geographic Filter (Select Division &rarr; District &rarr; Upazilla):</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                <!-- 1. Division Selector -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-500 mb-1">1. Select Division</label>
+                    <select id="geo-division-select" onchange="onDivisionChange()" 
+                            class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500 transition cursor-pointer">
+                        <option value="all">All Divisions</option>
+                    </select>
+                </div>
+
+                <!-- 2. District Selector -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-500 mb-1">2. Select District</label>
+                    <select id="geo-district-select" onchange="onDistrictChange()" 
+                            class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500 transition cursor-pointer">
+                        <option value="all">All Districts</option>
+                    </select>
+                </div>
+
+                <!-- 3. Upazilla Selector -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-500 mb-1">3. Select Upazilla</label>
+                    <select id="geo-upazilla-select" onchange="onUpazillaChange()" 
+                            class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-sky-500 transition cursor-pointer">
+                        <option value="all">All Upazillas</option>
+                    </select>
+                </div>
+
+                <!-- 4. Quick Upazilla Search -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Quick Upazilla Search</label>
+                    <div class="relative">
+                        <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2"></i>
+                        <input type="text" id="geo-upazilla-search" oninput="onUpazillaSearchInput()" placeholder="Type upazilla name..." 
+                               class="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-2 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-sky-500 transition">
+                    </div>
+                </div>
+
+                <!-- 5. Reset Action Button -->
+                <div class="flex items-end">
+                    <button type="button" onclick="resetGeoFilters()" 
+                            class="w-full bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold transition flex items-center justify-center gap-1.5 shadow-2xs">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                        <span>Reset Filters</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Particular Upazilla Highlight Card (Shown when an upazilla is filtered/selected) -->
+        <div id="particular-upazilla-card" class="hidden bg-gradient-to-r from-sky-50 via-slate-50 to-indigo-50 border border-sky-200 rounded-xl p-4.5 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-sky-100 pb-2.5">
+                <div class="flex items-center gap-2">
+                    <span id="particular-badge-grade" class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200">
+                        CRITICAL HOTSPOT
+                    </span>
+                    <h3 id="particular-name" class="text-base font-extrabold text-slate-900">Khan Jahan Ali Upazilla</h3>
+                    <span id="particular-region" class="text-xs text-slate-500">Khulna District, Khulna Division</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="focusParticularOnMap()" class="px-3 py-1 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-xs">
+                        <i data-lucide="navigation" class="w-3 h-3"></i>
+                        <span>Focus on Map</span>
+                    </button>
+                    <button type="button" onclick="filterTableToParticular()" class="px-3 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold border border-slate-200 transition flex items-center gap-1 shadow-2xs">
+                        <i data-lucide="table" class="w-3 h-3"></i>
+                        <span>View Records</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Particular Stats Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div class="bg-white/80 rounded-lg p-2.5 border border-sky-100">
+                    <div class="text-[10px] uppercase font-bold text-slate-400">Pothole Density Ratio</div>
+                    <div id="particular-density-ratio" class="text-xl font-black text-rose-600">62.5%</div>
+                    <div class="text-[10px] text-slate-500">of total recorded defects</div>
+                </div>
+                <div class="bg-white/80 rounded-lg p-2.5 border border-sky-100">
+                    <div class="text-[10px] uppercase font-bold text-slate-400">Total Hazards in Upazilla</div>
+                    <div id="particular-total" class="text-xl font-black text-slate-900">10</div>
+                    <div id="particular-severity-sub" class="text-[10px] text-rose-500 font-medium">4 Critical &bull; 5 High</div>
+                </div>
+                <div class="bg-white/80 rounded-lg p-2.5 border border-sky-100">
+                    <div class="text-[10px] uppercase font-bold text-slate-400">Repair Status</div>
+                    <div id="particular-status" class="text-xl font-black text-amber-600">0 Pending</div>
+                    <div id="particular-crew-sub" class="text-[10px] text-slate-500">Inspection queue</div>
+                </div>
+                <div class="bg-white/80 rounded-lg p-2.5 border border-sky-100">
+                    <div class="text-[10px] uppercase font-bold text-slate-400">Authority Action</div>
+                    <div id="particular-urgency" class="text-xs font-bold text-slate-800 mt-1">Routine Monitoring</div>
+                    <div id="particular-action-sub" class="text-[10px] text-slate-500">Action guideline</div>
+                </div>
+            </div>
+
+            <!-- Affected Roads in this Upazilla -->
+            <div class="text-xs text-slate-600 bg-white/70 p-2.5 rounded-lg border border-sky-100 flex items-start gap-2">
+                <i data-lucide="route" class="w-4 h-4 text-sky-600 shrink-0 mt-0.5"></i>
+                <div>
+                    <span class="font-bold text-slate-700">Major Affected Routes in this Upazilla: </span>
+                    <span id="particular-roads" class="text-slate-600">Teligati Road, Khulna-Jashore Highway, Fulbarigate Junction</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upazilla Density Ranking Leaderboard (Descending Order) -->
+        <div class="space-y-2">
+            <div class="flex items-center justify-between text-xs font-bold text-slate-700">
+                <span class="flex items-center gap-1.5">
+                    <i data-lucide="trending-down" class="w-3.5 h-3.5 text-rose-600"></i>
+                    <span id="geo-table-heading">Upazilla Pothole Density Ratio (Ranked in Descending Order)</span>
+                </span>
+                <span class="text-[11px] text-slate-400 font-normal">Click any row to inspect or focus GIS map</span>
+            </div>
+
+            <!-- Clean Table / List of Ranked Upazillas -->
+            <div class="overflow-x-auto rounded-lg border border-slate-200">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 text-slate-600 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200">
+                            <th class="py-2.5 px-3.5 w-12 text-center">Rank</th>
+                            <th class="py-2.5 px-3.5">Upazilla</th>
+                            <th class="py-2.5 px-3.5">District & Division</th>
+                            <th class="py-2.5 px-3.5 text-center">Potholes Count</th>
+                            <th class="py-2.5 px-3.5 w-64">Density Ratio (% of All Hazards)</th>
+                            <th class="py-2.5 px-3.5 text-center">Severity Profile</th>
+                            <th class="py-2.5 px-3.5">Repair Urgency</th>
+                            <th class="py-2.5 px-3.5 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="upazilla-density-body" class="divide-y divide-slate-100 text-xs">
+                        <tr>
+                            <td colspan="8" class="text-center py-6 text-slate-400">
+                                Loading upazilla-wise density analytics...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
     </section>
 
     <!-- Interactive GIS Road Hazard Map -->

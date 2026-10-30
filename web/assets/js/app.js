@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initHazardMap();
     loadHazardsData();
     initSupabaseRealtime();
+    loadUpazillaAnalytics();
 
     // Search input listener
     const searchInput = document.getElementById('search-input');
@@ -63,6 +64,7 @@ async function loadHazardsData() {
             updateStatsUI(data.stats);
             populateUserFilter(allReports);
             applyFilters();
+            loadUpazillaAnalytics();
         } else {
             console.error('Failed to load hazards:', data.error);
         }
@@ -138,9 +140,20 @@ function applyFilters() {
             const matchUser = (r.user_name || '').toLowerCase().includes(s) || 
                               (r.user_id || '').toLowerCase().includes(s) ||
                               (r.device_model || '').toLowerCase().includes(s);
-            if (!matchId && !matchTitle && !matchRoad && !matchDist && !matchUser) {
+            const matchUpa = (r.upazilla || '').toLowerCase().includes(s);
+            if (!matchId && !matchTitle && !matchRoad && !matchDist && !matchUser && !matchUpa) {
                 return false;
             }
+        }
+        // Geographic filters
+        if (currentGeoFilters.division !== 'all' && (r.division || '').toLowerCase() !== currentGeoFilters.division.toLowerCase()) {
+            return false;
+        }
+        if (currentGeoFilters.district !== 'all' && (r.district || '').toLowerCase() !== currentGeoFilters.district.toLowerCase()) {
+            return false;
+        }
+        if (currentGeoFilters.upazilla !== 'all' && (r.upazilla || '').toLowerCase() !== currentGeoFilters.upazilla.toLowerCase()) {
+            return false;
         }
         return true;
     });
@@ -242,6 +255,12 @@ function renderTable(reports) {
 
                 <!-- Location & GPS -->
                 <td class="py-3 px-4">
+                    <div class="flex items-center gap-1.5 mb-1">
+                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                            <i data-lucide="map-pin" class="w-3 h-3 text-sky-600"></i>
+                            <span>${r.upazilla || 'Khan Jahan Ali'}, ${r.district || 'Khulna'}</span>
+                        </span>
+                    </div>
                     <div class="text-xs font-medium text-slate-800 truncate max-w-[200px]" title="${r.road_name || ''}">
                         ${r.road_name || 'Survey Route Segment'}
                     </div>
@@ -621,5 +640,523 @@ function initSupabaseRealtime() {
         } catch (e) {
             console.warn('Supabase realtime init error:', e);
         }
+    }
+}
+
+
+// =========================================================================
+// UPAZILLA-WISE POTHOLE DENSITY RATIO & GEOGRAPHIC ANALYTICS SYSTEM
+// =========================================================================
+
+let geoHierarchy = null;
+let currentGeoFilters = {
+    division: 'all',
+    district: 'all',
+    upazilla: 'all',
+    search: ''
+};
+let currentGeoRankingData = [];
+let currentParticularStat = null;
+let upazillaSearchTimeout = null;
+
+/**
+ * Fetch and render Upazilla-wise Pothole Density Ratio Analytics
+ */
+async function loadUpazillaAnalytics() {
+    try {
+        const queryParams = new URLSearchParams({
+            division: currentGeoFilters.division,
+            district: currentGeoFilters.district,
+            upazilla: currentGeoFilters.upazilla,
+            search: currentGeoFilters.search
+        });
+
+        const resp = await fetch('api/upazilla_analytics.php?' + queryParams.toString());
+        const data = await resp.json();
+
+        if (!data.success) {
+            console.error('Upazilla analytics error:', data.error);
+            return;
+        }
+
+        geoHierarchy = data.hierarchy;
+        currentGeoRankingData = data.ranking || [];
+        currentParticularStat = data.particular_stat || null;
+
+        // Populate Division selector once
+        populateDivisionDropdown();
+
+        // Update Total Stats Pills
+        const upaCountEl = document.getElementById('stat-geo-upazillas-count');
+        if (upaCountEl) {
+            upaCountEl.textContent = data.totals ? data.totals.total_upazillas_affected : currentGeoRankingData.length;
+        }
+        const hazardCountEl = document.getElementById('stat-geo-hazards-count');
+        if (hazardCountEl) {
+            hazardCountEl.textContent = data.totals ? data.totals.in_scope : 0;
+        }
+
+        // Update Active Scope Badge
+        updateGeoActiveBadge();
+
+        // Update Table Heading based on Searching vs Descending Standings
+        const tableHeading = document.getElementById('geo-table-heading');
+        const isSearching = !!(currentGeoFilters.search && currentGeoFilters.search.trim().length > 0);
+
+        if (tableHeading) {
+            if (isSearching) {
+                tableHeading.textContent = `Search Results for "${currentGeoFilters.search}" (${currentGeoRankingData.length} Upazilla${currentGeoRankingData.length === 1 ? '' : 's'} found)`;
+            } else if (currentGeoFilters.upazilla !== 'all') {
+                tableHeading.textContent = `Standings: ${currentGeoFilters.upazilla} Upazilla`;
+            } else if (currentGeoFilters.district !== 'all') {
+                tableHeading.textContent = `Upazilla Standings: ${currentGeoFilters.district} District (Descending Order)`;
+            } else if (currentGeoFilters.division !== 'all') {
+                tableHeading.textContent = `Upazilla Standings: ${currentGeoFilters.division} Division (Descending Order)`;
+            } else {
+                tableHeading.textContent = 'Upazilla Pothole Density Ratio (Ranked in Descending Order)';
+            }
+        }
+
+        // Render Upazilla Standings / Search Table
+        renderUpazillaLeaderboard(currentGeoRankingData, data.totals ? data.totals.countrywide : 1);
+
+        // While searching, show ONLY the searching table results - HIDE the particular card
+        // Only show particular card when NOT searching AND when an upazilla with actual hazards is selected
+        const particularCard = document.getElementById('particular-upazilla-card');
+        if (isSearching || currentGeoFilters.upazilla === 'all' || !currentParticularStat || currentParticularStat.total_hazards === 0) {
+            if (particularCard) particularCard.classList.add('hidden');
+        } else {
+            renderParticularUpazillaCard(currentParticularStat);
+        }
+
+        // Refresh icons
+        if (window.lucide) lucide.createIcons();
+
+    } catch (err) {
+        console.error('Failed to load Upazilla analytics:', err);
+    }
+}
+
+/**
+ * Update the active scope badge
+ */
+function updateGeoActiveBadge() {
+    const badge = document.getElementById('geo-active-badge');
+    if (!badge) return;
+
+    if (currentGeoFilters.upazilla !== 'all') {
+        badge.innerHTML = `<span class="text-sky-700 font-bold">${currentGeoFilters.upazilla} Upazilla</span> &bull; ${currentGeoFilters.district} &bull; ${currentGeoFilters.division} Division`;
+    } else if (currentGeoFilters.district !== 'all') {
+        badge.innerHTML = `<span class="text-sky-700 font-bold">${currentGeoFilters.district} District</span> &bull; ${currentGeoFilters.division} Division &bull; Descending Order`;
+    } else if (currentGeoFilters.division !== 'all') {
+        badge.innerHTML = `<span class="text-sky-700 font-bold">${currentGeoFilters.division} Division</span> &bull; All Districts &bull; Descending Order`;
+    } else {
+        badge.textContent = 'All Bangladesh • Descending Order';
+    }
+}
+
+/**
+ * Populate Division Dropdown
+ */
+function populateDivisionDropdown() {
+    const divSelect = document.getElementById('geo-division-select');
+    if (!divSelect || divSelect.options.length > 1 || !geoHierarchy) return;
+
+    const divisions = Object.keys(geoHierarchy);
+    divisions.forEach(divName => {
+        const opt = document.createElement('option');
+        opt.value = divName;
+        opt.textContent = `${divName} Division`;
+        divSelect.appendChild(opt);
+    });
+}
+
+
+
+/**
+ * Handle Division Change -> Update District Selector
+ */
+function onDivisionChange() {
+    const divSelect = document.getElementById('geo-division-select');
+    const selectedDiv = divSelect.value;
+    currentGeoFilters.division = selectedDiv;
+    currentGeoFilters.district = 'all';
+    currentGeoFilters.upazilla = 'all';
+
+    const distSelect = document.getElementById('geo-district-select');
+    distSelect.innerHTML = '<option value="all">All Districts</option>';
+
+    const upaSelect = document.getElementById('geo-upazilla-select');
+    upaSelect.innerHTML = '<option value="all">All Upazillas</option>';
+
+    if (selectedDiv !== 'all' && geoHierarchy && geoHierarchy[selectedDiv]) {
+        const districts = Object.keys(geoHierarchy[selectedDiv]);
+        districts.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = `${d} District`;
+            distSelect.appendChild(opt);
+        });
+    }
+
+    applyFilters();
+    loadUpazillaAnalytics();
+}
+
+/**
+ * Handle District Change -> Update Upazilla Selector
+ */
+function onDistrictChange() {
+    const distSelect = document.getElementById('geo-district-select');
+    const selectedDist = distSelect.value;
+    currentGeoFilters.district = selectedDist;
+    currentGeoFilters.upazilla = 'all';
+
+    const upaSelect = document.getElementById('geo-upazilla-select');
+    upaSelect.innerHTML = '<option value="all">All Upazillas</option>';
+
+    const selectedDiv = currentGeoFilters.division;
+    if (selectedDiv !== 'all' && selectedDist !== 'all' && geoHierarchy && geoHierarchy[selectedDiv] && geoHierarchy[selectedDiv][selectedDist]) {
+        const upazillas = geoHierarchy[selectedDiv][selectedDist];
+        upazillas.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u;
+            opt.textContent = `${u} Upazilla`;
+            upaSelect.appendChild(opt);
+        });
+    }
+
+    applyFilters();
+    loadUpazillaAnalytics();
+}
+
+/**
+ * Handle Upazilla Selection
+ */
+function onUpazillaChange() {
+    const upaSelect = document.getElementById('geo-upazilla-select');
+    currentGeoFilters.upazilla = upaSelect.value;
+
+    applyFilters();
+    loadUpazillaAnalytics();
+}
+
+/**
+ * Quick Upazilla Search Input (Live debounced filter)
+ */
+function onUpazillaSearchInput() {
+    clearTimeout(upazillaSearchTimeout);
+    const searchVal = document.getElementById('geo-upazilla-search').value.trim();
+    upazillaSearchTimeout = setTimeout(() => {
+        currentGeoFilters.search = searchVal;
+        loadUpazillaAnalytics();
+    }, 250);
+}
+
+/**
+ * Reset all geographic filters
+ */
+function resetGeoFilters() {
+    currentGeoFilters.division = 'all';
+    currentGeoFilters.district = 'all';
+    currentGeoFilters.upazilla = 'all';
+    currentGeoFilters.search = '';
+
+    const divSelect = document.getElementById('geo-division-select');
+    if (divSelect) divSelect.value = 'all';
+
+    const distSelect = document.getElementById('geo-district-select');
+    if (distSelect) distSelect.innerHTML = '<option value="all">All Districts</option>';
+
+    const upaSelect = document.getElementById('geo-upazilla-select');
+    if (upaSelect) upaSelect.innerHTML = '<option value="all">All Upazillas</option>';
+
+    const searchInput = document.getElementById('geo-upazilla-search');
+    if (searchInput) searchInput.value = '';
+
+    applyFilters();
+    loadUpazillaAnalytics();
+    if (typeof showToast === 'function') {
+        showToast('✓ Geographic filters reset to all Bangladesh.');
+    }
+}
+
+/**
+ * Render Upazilla Density Leaderboard (Ranked in Descending Order)
+ */
+function renderUpazillaLeaderboard(ranking, countrywideTotal) {
+    const tbody = document.getElementById('upazilla-density-body');
+    if (!tbody) return;
+
+    if (!ranking || ranking.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" class="text-center py-8 text-slate-400">
+                    <div class="flex flex-col items-center justify-center gap-1.5">
+                        <i data-lucide="map-pin-off" class="w-6 h-6 text-slate-300"></i>
+                        <span>No road hazard records found for the selected geographic scope.</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        if (window.lucide) lucide.createIcons();
+        return;
+    }
+
+    tbody.innerHTML = ranking.map(item => {
+        // Density progress bar color
+        let barColor = 'bg-rose-500';
+        let badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
+        if (item.total_hazards === 0) {
+            barColor = 'bg-slate-200';
+            badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        } else if (item.density_percentage >= 30) {
+            barColor = 'bg-rose-600';
+            badgeClass = 'bg-rose-100 text-rose-700 border-rose-200';
+        } else if (item.density_percentage >= 15) {
+            barColor = 'bg-orange-500';
+            badgeClass = 'bg-orange-100 text-orange-700 border-orange-200';
+        } else if (item.density_percentage >= 5) {
+            barColor = 'bg-amber-500';
+            badgeClass = 'bg-amber-100 text-amber-700 border-amber-200';
+        } else {
+            barColor = 'bg-emerald-500';
+            badgeClass = 'bg-emerald-100 text-emerald-700 border-emerald-200';
+        }
+
+        // Rank Badge
+        let rankBadge = `<span class="w-6 h-6 rounded-full bg-slate-100 text-slate-700 font-black text-xs inline-flex items-center justify-center border border-slate-200">#${item.rank}</span>`;
+        if (item.rank === 1) {
+            rankBadge = `<span class="w-6 h-6 rounded-full bg-rose-600 text-white font-black text-xs inline-flex items-center justify-center shadow-xs">#1</span>`;
+        } else if (item.rank === 2) {
+            rankBadge = `<span class="w-6 h-6 rounded-full bg-orange-500 text-white font-black text-xs inline-flex items-center justify-center">#2</span>`;
+        } else if (item.rank === 3) {
+            rankBadge = `<span class="w-6 h-6 rounded-full bg-amber-500 text-white font-black text-xs inline-flex items-center justify-center">#3</span>`;
+        }
+
+        return `
+            <tr class="hover:bg-slate-50/80 transition border-b border-slate-100 group">
+                <!-- Rank -->
+                <td class="py-3 px-3.5 text-center font-bold">
+                    ${rankBadge}
+                </td>
+
+                <!-- Upazilla Name -->
+                <td class="py-3 px-3.5">
+                    <div class="font-black text-slate-900 text-xs flex items-center gap-1.5 cursor-pointer hover:text-sky-700 transition" 
+                         onclick="selectParticularUpazilla('${item.upazilla}', '${item.district}', '${item.division}')">
+                        <i data-lucide="map-pin" class="w-3.5 h-3.5 text-rose-500 shrink-0"></i>
+                        <span>${item.upazilla} Upazilla</span>
+                    </div>
+
+                </td>
+
+                <!-- District & Division -->
+                <td class="py-3 px-3.5 text-xs text-slate-600">
+                    <div class="font-semibold text-slate-800">${item.district} District</div>
+                    <div class="text-[10px] text-slate-400">${item.division} Division</div>
+                </td>
+
+                <!-- Potholes Count -->
+                <td class="py-3 px-3.5 text-center">
+                    <div class="inline-flex items-baseline gap-1 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
+                        <span class="text-sm font-black text-slate-900">${item.total_hazards}</span>
+                        <span class="text-[10px] text-slate-400 font-medium">defects</span>
+                    </div>
+                </td>
+
+                <!-- Density Ratio Percentage & Progress Bar -->
+                <td class="py-3 px-3.5 ${item.total_hazards === 0 ? 'text-center' : ''}">
+                    ${item.total_hazards === 0 
+                        ? `<div class="text-base font-black text-slate-400 tracking-tight flex items-center justify-center">0%</div>`
+                        : `<div>
+                            <div class="flex items-center justify-between text-xs mb-1">
+                                <span class="font-black text-slate-900 text-sm">${item.density_percentage}%</span>
+                                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded border ${badgeClass}">${item.density_grade}</span>
+                            </div>
+                            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200/80">
+                                <div class="${barColor} h-full rounded-full transition-all duration-500" style="width: ${Math.max(6, item.density_relative_pct)}%"></div>
+                            </div>
+                        </div>`
+                    }
+                </td>
+
+                <!-- Severity Profile -->
+                <td class="py-3 px-3.5 text-center">
+                    ${item.total_hazards === 0 
+                        ? `<span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">All Clear (0)</span>`
+                        : `<div class="inline-flex items-center gap-1 text-[10px] font-bold">
+                            ${item.critical_count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200" title="Critical">${item.critical_count} Crit</span>` : ''}
+                            ${item.high_count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-200" title="High">${item.high_count} High</span>` : ''}
+                            ${item.medium_count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200" title="Medium">${item.medium_count} Med</span>` : ''}
+                            ${item.low_count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200" title="Low">${item.low_count} Low</span>` : ''}
+                        </div>`
+                    }
+                </td>
+
+                <!-- Repair Urgency -->
+                <td class="py-3 px-3.5 text-xs text-slate-700">
+                    <div class="font-bold truncate max-w-[160px]" title="${item.urgency}">${item.urgency}</div>
+                    <div class="text-[10px] text-slate-400">${item.pending_count} pending inspection</div>
+                </td>
+
+                <!-- Actions -->
+                <td class="py-3 px-3.5 text-right">
+                    <div class="inline-flex items-center gap-1.5">
+                        <button type="button" onclick="focusUpazilla(${item.centroid_lat}, ${item.centroid_lng}, '${item.upazilla}')" 
+                                class="px-2.5 py-1 rounded-md text-[11px] font-bold bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 transition flex items-center gap-1 shadow-2xs"
+                                title="Center and Zoom Map on ${item.upazilla}">
+                            <i data-lucide="navigation" class="w-3 h-3"></i>
+                            <span>Map</span>
+                        </button>
+                        <button type="button" onclick="filterTableToUpazilla('${item.upazilla}')" 
+                                class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition flex items-center gap-1"
+                                title="View all potholes in ${item.upazilla}">
+                            <i data-lucide="list-filter" class="w-3 h-3"></i>
+                            <span>Records</span>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    if (window.lucide) lucide.createIcons();
+}
+
+/**
+ * Render Particular Upazilla Highlight Card
+ */
+function renderParticularUpazillaCard(stat) {
+    const card = document.getElementById('particular-upazilla-card');
+    if (!card) return;
+
+    if (!stat) {
+        card.classList.add('hidden');
+        return;
+    }
+
+    card.classList.remove('hidden');
+
+    document.getElementById('particular-name').textContent = `${stat.upazilla} Upazilla`;
+    document.getElementById('particular-region').textContent = `${stat.district} District, ${stat.division} Division`;
+    document.getElementById('particular-density-ratio').textContent = `${stat.density_percentage}%`;
+    document.getElementById('particular-total').textContent = stat.total_hazards;
+
+    const badgeGrade = document.getElementById('particular-badge-grade');
+
+    if (stat.total_hazards === 0) {
+        document.getElementById('particular-severity-sub').textContent = 'All Clear • 0 Defects Reported';
+        document.getElementById('particular-status').textContent = '0 Pending (All Clear)';
+        document.getElementById('particular-urgency').textContent = 'Safe Pavement - Routine Monitoring';
+        document.getElementById('particular-roads').textContent = 'No active defects reported on this route';
+        if (badgeGrade) {
+            badgeGrade.textContent = 'ZERO DEFECTS (CLEAR)';
+            badgeGrade.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300';
+        }
+    } else {
+        document.getElementById('particular-severity-sub').textContent = `${stat.critical_count} Critical • ${stat.high_count} High • ${stat.medium_count} Medium`;
+        document.getElementById('particular-status').textContent = `${stat.pending_count} Pending Review`;
+        document.getElementById('particular-urgency').textContent = stat.urgency;
+
+        const roadsStr = stat.sample_roads && stat.sample_roads.length > 0 
+            ? stat.sample_roads.join(', ') 
+            : 'Active Pavement Route Coordinates';
+        document.getElementById('particular-roads').textContent = roadsStr;
+
+        const crewSub = document.getElementById('particular-crew-sub');
+        if (crewSub) crewSub.textContent = `${stat.in_progress_count || 0} active crew assigned`;
+
+        const actionSub = document.getElementById('particular-action-sub');
+        if (actionSub) actionSub.textContent = `${stat.urgency || 'Inspection priority'}`;
+
+
+        if (badgeGrade) {
+            badgeGrade.textContent = stat.density_grade.toUpperCase();
+            if (stat.density_percentage >= 30) {
+                badgeGrade.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200';
+            } else if (stat.density_percentage >= 15) {
+                badgeGrade.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-orange-100 text-orange-700 border border-orange-200';
+            } else if (stat.density_percentage >= 5) {
+                badgeGrade.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 border border-amber-200';
+            } else {
+                badgeGrade.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300';
+            }
+        }
+    }
+
+    if (window.lucide) lucide.createIcons();
+}
+
+/**
+ * Select a specific upazilla from the table or card
+ */
+function selectParticularUpazilla(upazilla, district, division) {
+    currentGeoFilters.division = division;
+    currentGeoFilters.district = district;
+    currentGeoFilters.upazilla = upazilla;
+
+    const divSelect = document.getElementById('geo-division-select');
+    if (divSelect) divSelect.value = division;
+    onDivisionChange();
+
+    setTimeout(() => {
+        const distSelect = document.getElementById('geo-district-select');
+        if (distSelect) distSelect.value = district;
+        onDistrictChange();
+
+        setTimeout(() => {
+            const upaSelect = document.getElementById('geo-upazilla-select');
+            if (upaSelect) upaSelect.value = upazilla;
+            onUpazillaChange();
+        }, 80);
+    }, 80);
+}
+
+/**
+ * Focus map on the particular upazilla
+ */
+function focusParticularOnMap() {
+    if (!currentParticularStat) return;
+    focusUpazilla(currentParticularStat.centroid_lat, currentParticularStat.centroid_lng, currentParticularStat.upazilla);
+}
+
+/**
+ * Filter records table to the particular upazilla
+ */
+function filterTableToParticular() {
+    if (!currentParticularStat) return;
+    filterTableToUpazilla(currentParticularStat.upazilla);
+}
+
+/**
+ * Fly map to an Upazilla and scroll smoothly to map
+ */
+function focusUpazilla(lat, lng, upazillaName) {
+    if (typeof flyToUpazillaLocation === 'function') {
+        flyToUpazillaLocation(lat, lng, upazillaName);
+    } else if (hazardMap && lat && lng) {
+        hazardMap.flyTo([lat, lng], 14.5, { animate: true, duration: 1.0 });
+        const mapEl = document.getElementById('hazard-map');
+        if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+/**
+ * Filter data table to an upazilla and scroll to table
+ */
+function filterTableToUpazilla(upazillaName) {
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.value = upazillaName;
+        currentFilter.search = upazillaName.toLowerCase();
+        applyFilters();
+    }
+    const tableSection = document.getElementById('reports-table-body');
+    if (tableSection) {
+        tableSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (typeof showToast === 'function') {
+        showToast(`Filtered database records to: ${upazillaName} Upazilla`);
     }
 }
