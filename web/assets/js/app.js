@@ -1,3 +1,23 @@
+
+let currentOpenReportId = null;
+
+// Callback triggered whenever the language switch occurs
+function onLanguageChanged(lang) {
+    if (window.latestStatsData) {
+        updateStatsUI(window.latestStatsData);
+    }
+    populateUserFilter(allReports);
+    updateAllGeoDropdowns();
+    updateGeoActiveBadge();
+    applyFilters();
+    loadUpazillaAnalytics();
+    if (currentOpenReportId) {
+        openInspectionModal(currentOpenReportId);
+    }
+    if (typeof updateMapMarkers === 'function') {
+        updateMapMarkers(allReports);
+    }
+}
 /**
  * Road Hazard Authority Portal Application Logic - Multi-User System
  */
@@ -14,6 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initHazardMap();
     loadHazardsData();
     initSupabaseRealtime();
+    updateAllGeoDropdowns();
     loadUpazillaAnalytics();
 
     // Search input listener
@@ -61,6 +82,7 @@ async function loadHazardsData() {
 
         if (data.success) {
             allReports = data.data;
+            window.latestStatsData = data.stats;
             updateStatsUI(data.stats);
             populateUserFilter(allReports);
             applyFilters();
@@ -89,12 +111,15 @@ function populateUserFilter(reports) {
     });
 
     const currentSelection = userSelect.value;
-    userSelect.innerHTML = `<option value="all">All Citizens / Users (${Object.keys(usersMap).length} contributors)</option>`;
+    const allUsersLabel = currentAppLang === 'bn' 
+        ? `${t('filter_all_users_prefix')} (${formatNumber(Object.keys(usersMap).length)} ${t('filter_contributors')})`
+        : `All Citizens / Users (${Object.keys(usersMap).length} contributors)`;
+    userSelect.innerHTML = `<option value="all">${allUsersLabel}</option>`;
     
     for (const [uid, u] of Object.entries(usersMap)) {
         const opt = document.createElement('option');
         opt.value = uid;
-        opt.textContent = `${u.name} (${u.count})`;
+        opt.textContent = `${u.name} (${formatNumber(u.count)})`;
         if (uid === currentSelection) opt.selected = true;
         userSelect.appendChild(opt);
     }
@@ -103,15 +128,15 @@ function populateUserFilter(reports) {
 // Update Top KPI Cards
 function updateStatsUI(stats) {
     if (!stats) return;
-    document.getElementById('stat-total').textContent = stats.total ?? 0;
-    document.getElementById('stat-high').textContent = stats.high_severity ?? 0;
-    document.getElementById('stat-pending').textContent = stats.pending ?? 0;
-    document.getElementById('stat-progress').textContent = stats.in_progress ?? 0;
-    document.getElementById('stat-resolved').textContent = stats.resolved ?? 0;
+    document.getElementById('stat-total').textContent = formatNumber(stats.total ?? 0);
+    document.getElementById('stat-high').textContent = formatNumber(stats.high_severity ?? 0);
+    document.getElementById('stat-pending').textContent = formatNumber(stats.pending ?? 0);
+    document.getElementById('stat-progress').textContent = formatNumber(stats.in_progress ?? 0);
+    document.getElementById('stat-resolved').textContent = formatNumber(stats.resolved ?? 0);
     
     const usersEl = document.getElementById('stat-users');
     if (usersEl) {
-        usersEl.textContent = stats.total_users ?? 1;
+        usersEl.textContent = formatNumber(stats.total_users ?? 1);
     }
 }
 
@@ -160,7 +185,7 @@ function applyFilters() {
 
     renderTable(filtered);
     updateMapMarkers(filtered);
-    document.getElementById('filter-count').textContent = `${filtered.length} of ${allReports.length} records`;
+    document.getElementById('filter-count').textContent = currentAppLang === 'bn' ? `${formatNumber(filtered.length)} / ${formatNumber(allReports.length)} ${t('records_count_suffix')}` : `${filtered.length} of ${allReports.length} records`;
 }
 
 // Render data table with Multi-User Scanner Column
@@ -174,7 +199,7 @@ function renderTable(reports) {
                 <td colspan="7" class="text-center py-12 text-slate-500">
                     <div class="flex flex-col items-center justify-center gap-2">
                         <i data-lucide="inbox" class="w-8 h-8 text-slate-600"></i>
-                        <span>No road hazard records found matching current criteria.</span>
+                        <span>${t('table_empty_records')}</span>
                     </div>
                 </td>
             </tr>
@@ -187,11 +212,15 @@ function renderTable(reports) {
         const sevClass = getSeverityBadgeClass(r.severity);
         const lat = parseFloat(r.latitude).toFixed(5);
         const lng = parseFloat(r.longitude).toFixed(5);
-        const uName = r.user_name || 'Citizen Contributor';
+        const uName = r.user_name || (currentAppLang === 'bn' ? 'নাগরিক অবদানকারী' : 'Citizen Contributor');
         const uId = r.user_id || 'anonymous';
-        const uDevice = r.device_model || 'Android Phone';
+        const uDevice = r.device_model || (currentAppLang === 'bn' ? 'অ্যান্ড্রয়েড ফোন' : 'Android Phone');
         const avatarBg = getUserAvatarBg(uName);
         const initials = getUserInitials(uName);
+        const sevText = translateSeverity(r.severity);
+        const upazillaText = translateGeoName(r.upazilla || 'Khan Jahan Ali');
+        const districtText = translateGeoName(r.district || 'Khulna');
+        const confPct = r.confidence_pct || Math.round(r.confidence * 100);
 
         return `
             <tr class="hover:bg-slate-50 transition border-b border-slate-100 group">
@@ -203,7 +232,7 @@ function renderTable(reports) {
                              class="w-full h-full object-cover group-hover:scale-105 transition duration-200"
                              onerror="this.src='uploads/potholes/rpt-1792217799588.jpg'">
                         <span class="absolute bottom-0 right-0 bg-slate-900/80 text-[9px] px-1 font-mono text-white rounded-tl">
-                            ${r.defects_count}x
+                            ${formatNumber(r.defects_count)}x
                         </span>
                     </div>
                 </td>
@@ -214,11 +243,8 @@ function renderTable(reports) {
                         <span>${r.id}</span>
                     </div>
                     <div class="text-[11px] text-slate-500 mt-0.5">
-                        ${formatDate(r.reported_at)}
+                        ${formatAppDate(r.reported_at)}
                     </div>
-                    <span class="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-mono border border-slate-200">
-                        ${r.model_name || 'best.tflite'}
-                    </span>
                 </td>
 
                 <!-- Citizen / User Scanner (Multi-User Visibility) -->
@@ -228,15 +254,11 @@ function renderTable(reports) {
                             ${initials}
                         </div>
                         <div class="min-w-0">
-                            <div class="font-bold text-slate-900 text-xs truncate max-w-[150px]" title="${uName}">
+                            <div class="font-bold text-slate-900 text-xs truncate max-w-[180px]" title="${uName}">
                                 ${uName}
                             </div>
-                            <div class="text-[10px] text-sky-700 font-mono flex items-center gap-1">
+                            <div class="text-[10px] text-sky-700 font-mono flex items-center gap-1 mt-0.5">
                                 <span>${uId}</span>
-                            </div>
-                            <div class="text-[10px] text-slate-400 truncate max-w-[150px] flex items-center gap-1 mt-0.5" title="${uDevice}">
-                                <i data-lucide="smartphone" class="w-3 h-3 inline"></i>
-                                <span>${uDevice}</span>
                             </div>
                         </div>
                     </div>
@@ -245,11 +267,11 @@ function renderTable(reports) {
                 <!-- Severity & Confidence -->
                 <td class="py-3 px-4">
                     <span class="inline-block px-2.5 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${sevClass}">
-                        ${r.severity}
+                        ${sevText}
                     </span>
                     <div class="text-xs text-slate-600 mt-1 flex items-center gap-1">
-                        <span class="font-bold text-slate-900">${r.confidence_pct || Math.round(r.confidence * 100)}%</span>
-                        <span class="text-slate-400">conf.</span>
+                        <span class="font-bold text-slate-900">${formatNumber(confPct)}%</span>
+                        <span class="text-slate-400">${t('conf_suffix')}</span>
                     </div>
                 </td>
 
@@ -258,15 +280,17 @@ function renderTable(reports) {
                     <div class="flex items-center gap-1.5 mb-1">
                         <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
                             <i data-lucide="map-pin" class="w-3 h-3 text-sky-600"></i>
-                            <span>${r.upazilla || 'Khan Jahan Ali'}, ${r.district || 'Khulna'}</span>
+                            <span>${upazillaText}, ${districtText}</span>
                         </span>
                     </div>
                     <div class="text-xs font-medium text-slate-800 truncate max-w-[200px]" title="${r.road_name || ''}">
-                        ${r.road_name || 'Survey Route Segment'}
+                        ${(!r.road_name || r.road_name === 'Location unavailable') 
+                            ? (currentAppLang === 'bn' ? `${upazillaText} সড়ক সেগমেন্ট` : `${r.upazilla || 'Survey'} Route Segment`) 
+                            : r.road_name}
                     </div>
                     <div class="text-[11px] text-slate-500 flex items-center gap-2 mt-1">
                         <span class="font-mono text-sky-700 font-medium">${lat}, ${lng}</span>
-                        <button onclick="flyToReport('${r.id}')" title="Locate on GIS Map" class="text-sky-600 hover:text-sky-800 transition">
+                        <button onclick="flyToReport('${r.id}')" title="${currentAppLang === 'bn' ? 'ম্যাপে দেখুন' : 'Locate on GIS Map'}" class="text-sky-600 hover:text-sky-800 transition cursor-pointer">
                             <i data-lucide="map-pin" class="w-3.5 h-3.5 inline"></i>
                         </button>
                     </div>
@@ -275,23 +299,23 @@ function renderTable(reports) {
                 <!-- Status Selector -->
                 <td class="py-3 px-4">
                     <select onchange="updateReportStatus('${r.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium px-2.5 py-1.5 text-slate-800 focus:outline-none focus:bg-white focus:border-sky-500 cursor-pointer">
-                        <option value="reported" ${r.status === 'reported' ? 'selected' : ''}>⏳ Pending Review</option>
-                        <option value="verified" ${r.status === 'verified' ? 'selected' : ''}>🔍 Verified</option>
-                        <option value="assigned" ${r.status === 'assigned' ? 'selected' : ''}>👷 Assigned</option>
-                        <option value="under_repair" ${r.status === 'under_repair' ? 'selected' : ''}>🛠️ Under Repair</option>
-                        <option value="resolved" ${r.status === 'resolved' ? 'selected' : ''}>✅ Resolved</option>
+                        <option value="reported" ${r.status === 'reported' ? 'selected' : ''}>${t('status_reported')}</option>
+                        <option value="verified" ${r.status === 'verified' ? 'selected' : ''}>${t('status_verified')}</option>
+                        <option value="assigned" ${r.status === 'assigned' ? 'selected' : ''}>${t('status_assigned')}</option>
+                        <option value="under_repair" ${r.status === 'under_repair' ? 'selected' : ''}>${t('status_under_repair')}</option>
+                        <option value="resolved" ${r.status === 'resolved' ? 'selected' : ''}>${t('status_resolved')}</option>
                     </select>
-                    ${r.assigned_crew ? `<div class="text-[10px] text-slate-500 mt-1 truncate max-w-[150px]">Crew: ${r.assigned_crew}</div>` : ''}
+                    ${r.assigned_crew ? `<div class="text-[10px] text-slate-500 mt-1 truncate max-w-[150px]">${t('crew_label')} ${r.assigned_crew}</div>` : ''}
                 </td>
 
                 <!-- Actions -->
                 <td class="py-3 px-4 text-right">
                     <div class="flex items-center justify-end gap-1.5">
-                        <button onclick="openInspectionModal('${r.id}')" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1 border border-slate-200">
+                        <button onclick="openInspectionModal('${r.id}')" class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1 border border-slate-200 cursor-pointer">
                             <i data-lucide="eye" class="w-3.5 h-3.5 text-slate-500"></i>
-                            <span>Inspect</span>
+                            <span>${t('btn_inspect')}</span>
                         </button>
-                        <button onclick="deleteReport('${r.id}')" class="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs transition border border-rose-200" title="Delete record">
+                        <button onclick="deleteReport('${r.id}')" class="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg text-xs transition border border-rose-200 cursor-pointer" title="Delete record">
                             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                         </button>
                     </div>
@@ -377,6 +401,7 @@ async function deleteReport(reportId) {
 
 // Open detailed inspection modal (Matching Android App Interface!)
 function openInspectionModal(reportId) {
+    currentOpenReportId = reportId;
     const report = allReports.find(x => x.id === reportId);
     if (!report) return;
 
@@ -385,11 +410,11 @@ function openInspectionModal(reportId) {
 
     // Fill Modal Header Data
     document.getElementById('modal-report-id').textContent = report.id;
-    document.getElementById('modal-title').textContent = report.title || 'Pothole Detected';
-    document.getElementById('modal-status-badge').textContent = (report.status || 'reported').toUpperCase();
+    document.getElementById('modal-title').textContent = report.title || t('modal_details_title');
+    document.getElementById('modal-status-badge').textContent = translateStatus(report.status);
     
     const sevBadge = document.getElementById('modal-severity-badge');
-    sevBadge.textContent = report.severity;
+    sevBadge.textContent = translateSeverity(report.severity);
     sevBadge.className = `px-2.5 py-1 rounded text-xs font-bold uppercase tracking-wider ${getSeverityBadgeClass(report.severity)}`;
 
     // Image & Bounding Box Overlays
@@ -456,34 +481,34 @@ function openInspectionModal(reportId) {
     }
 
     // AI Detection Metrics
-    document.getElementById('modal-conf').textContent = (report.confidence_pct || Math.round(report.confidence * 100)) + '%';
-    document.getElementById('modal-sev-text').textContent = report.severity;
-    document.getElementById('modal-defects').textContent = (report.defects_count || 1) + ' detected';
-    document.getElementById('modal-inference').textContent = `${report.model_name || 'best.tflite'} (${report.inference_time_ms || 1575}ms inference)`;
+    document.getElementById('modal-conf').textContent = formatNumber(report.confidence_pct || Math.round(report.confidence * 100)) + '%';
+    document.getElementById('modal-sev-text').textContent = translateSeverity(report.severity);
+    document.getElementById('modal-defects').textContent = `${formatNumber(report.defects_count || 1)} ${t('modal_detected_suffix')}`;
+    document.getElementById('modal-inference').textContent = `${report.model_name || 'best.tflite'} (${formatNumber(report.inference_time_ms || 1575)}ms ${t('modal_inference_suffix')})`;
 
     // Physical Measurements from Android App DamageReport
     const dmgTypeEl = document.getElementById('modal-damage-type');
-    if (dmgTypeEl) dmgTypeEl.textContent = report.damage_type || 'Pothole';
+    if (dmgTypeEl) dmgTypeEl.textContent = translateDefectType(report.damage_type || 'Pothole');
 
     const depthEl = document.getElementById('modal-depth');
     if (depthEl) {
         depthEl.textContent = (report.estimated_depth_cm && report.estimated_depth_cm > 0) 
-            ? `${report.estimated_depth_cm} cm` 
-            : 'N/A';
+            ? `${formatNumber(report.estimated_depth_cm)} cm` 
+            : '--';
     }
 
     const crackEl = document.getElementById('modal-crack-width');
     if (crackEl) {
         crackEl.textContent = (report.crack_width_mm && report.crack_width_mm > 0) 
-            ? `${report.crack_width_mm} mm` 
-            : 'N/A';
+            ? `${formatNumber(report.crack_width_mm)} mm` 
+            : '--';
     }
 
     const areaEl = document.getElementById('modal-area');
     if (areaEl) {
         areaEl.textContent = (report.damage_area_sqm && report.damage_area_sqm > 0) 
-            ? `${report.damage_area_sqm} m²` 
-            : 'N/A';
+            ? `${formatNumber(report.damage_area_sqm)} m²` 
+            : '--';
     }
 
     // Hazards breakdown list
@@ -498,7 +523,7 @@ function openInspectionModal(reportId) {
         items = [{ id: 1, type: 'Pothole', surface_coverage: 4.6, confidence: Math.round(report.confidence * 100) }];
     }
 
-    document.getElementById('modal-hazard-count').textContent = `${items.length} Items`;
+    document.getElementById('modal-hazard-count').textContent = `${formatNumber(items.length)} ${t('modal_items_suffix')}`;
 
     items.forEach((item, idx) => {
         const itemEl = document.createElement('div');
@@ -506,15 +531,15 @@ function openInspectionModal(reportId) {
         itemEl.innerHTML = `
             <div class="flex items-center gap-2.5">
                 <span class="w-6 h-6 rounded-full bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold flex items-center justify-center">
-                    ${item.id || (idx + 1)}
+                    ${formatNumber(item.id || (idx + 1))}
                 </span>
                 <div>
-                    <div class="text-xs font-bold text-slate-900">${item.type || 'Pothole'}</div>
-                    <div class="text-[11px] text-slate-500">Surface coverage: <span class="text-slate-700 font-semibold">${item.surface_coverage || '3.5'}%</span></div>
+                    <div class="text-xs font-bold text-slate-900">${translateDefectType(item.type || 'Pothole')}</div>
+                    <div class="text-[11px] text-slate-500">${t('modal_surface_coverage')} <span class="text-slate-700 font-semibold">${formatNumber(item.surface_coverage || '3.5')}%</span></div>
                 </div>
             </div>
             <div class="px-2 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold">
-                ${item.confidence || 66}% Conf.
+                ${formatNumber(item.confidence || 66)}% ${t('modal_conf_short')}
             </div>
         `;
         breakdownContainer.appendChild(itemEl);
@@ -543,6 +568,7 @@ function openInspectionModal(reportId) {
 }
 
 function closeInspectionModal() {
+    currentOpenReportId = null;
     const modal = document.getElementById('inspection-modal');
     if (!modal) return;
     modal.classList.add('hidden');
@@ -648,7 +674,16 @@ function initSupabaseRealtime() {
 // UPAZILLA-WISE POTHOLE DENSITY RATIO & GEOGRAPHIC ANALYTICS SYSTEM
 // =========================================================================
 
-let geoHierarchy = null;
+let geoHierarchy = {
+    'Khulna': {},
+    'Dhaka': {},
+    'Chattogram': {},
+    'Rajshahi': {},
+    'Barishal': {},
+    'Sylhet': {},
+    'Rangpur': {},
+    'Mymensingh': {}
+};
 let currentGeoFilters = {
     division: 'all',
     district: 'all',
@@ -683,8 +718,8 @@ async function loadUpazillaAnalytics() {
         currentGeoRankingData = data.ranking || [];
         currentParticularStat = data.particular_stat || null;
 
-        // Populate Division selector once
-        populateDivisionDropdown();
+        // Populate / update all geographic selectors in the active language
+        updateAllGeoDropdowns();
 
         // Update Total Stats Pills
         const upaCountEl = document.getElementById('stat-geo-upazillas-count');
@@ -705,15 +740,23 @@ async function loadUpazillaAnalytics() {
 
         if (tableHeading) {
             if (isSearching) {
-                tableHeading.textContent = `Search Results for "${currentGeoFilters.search}" (${currentGeoRankingData.length} Upazilla${currentGeoRankingData.length === 1 ? '' : 's'} found)`;
+                tableHeading.textContent = currentAppLang === 'bn'
+                    ? `"${currentGeoFilters.search}" এর ফলাফল (${formatNumber(currentGeoRankingData.length)}টি উপজেলা পাওয়া গেছে)`
+                    : `Search Results for "${currentGeoFilters.search}" (${currentGeoRankingData.length} Upazilla${currentGeoRankingData.length === 1 ? '' : 's'} found)`;
             } else if (currentGeoFilters.upazilla !== 'all') {
-                tableHeading.textContent = `Standings: ${currentGeoFilters.upazilla} Upazilla`;
+                tableHeading.textContent = currentAppLang === 'bn'
+                    ? `${translateGeoName(currentGeoFilters.upazilla)} উপজেলা স্ট্যান্ডিংস`
+                    : `Standings: ${currentGeoFilters.upazilla} Upazilla`;
             } else if (currentGeoFilters.district !== 'all') {
-                tableHeading.textContent = `Upazilla Standings: ${currentGeoFilters.district} District (Descending Order)`;
+                tableHeading.textContent = currentAppLang === 'bn'
+                    ? `${translateGeoName(currentGeoFilters.district)} জেলা স্ট্যান্ডিংস (সর্বোচ্চ থেকে সর্বনিম্ন)`
+                    : `Upazilla Standings: ${currentGeoFilters.district} District (Descending Order)`;
             } else if (currentGeoFilters.division !== 'all') {
-                tableHeading.textContent = `Upazilla Standings: ${currentGeoFilters.division} Division (Descending Order)`;
+                tableHeading.textContent = currentAppLang === 'bn'
+                    ? `${translateGeoName(currentGeoFilters.division)} বিভাগ স্ট্যান্ডিংস (সর্বোচ্চ থেকে সর্বনিম্ন)`
+                    : `Upazilla Standings: ${currentGeoFilters.division} Division (Descending Order)`;
             } else {
-                tableHeading.textContent = 'Upazilla Pothole Density Ratio (Ranked in Descending Order)';
+                tableHeading.textContent = t('table_density_heading');
             }
         }
 
@@ -756,48 +799,92 @@ function updateGeoActiveBadge() {
 }
 
 /**
- * Populate Division Dropdown
+ * Update all geographic dropdowns (Division, District, Upazilla) in the active language
+ */
+function updateAllGeoDropdowns() {
+    populateDivisionDropdown();
+    populateDistrictDropdown();
+    populateUpazillaDropdown();
+}
+
+/**
+ * Populate Division Dropdown in the active language
  */
 function populateDivisionDropdown() {
     const divSelect = document.getElementById('geo-division-select');
-    if (!divSelect || divSelect.options.length > 1 || !geoHierarchy) return;
+    if (!divSelect || !geoHierarchy) return;
 
+    const currentSelection = currentGeoFilters.division || 'all';
     const divisions = Object.keys(geoHierarchy);
+
+    divSelect.innerHTML = `<option value="all">${t('geo_all_divisions')}</option>`;
     divisions.forEach(divName => {
         const opt = document.createElement('option');
         opt.value = divName;
-        opt.textContent = `${divName} Division`;
+        opt.textContent = `${translateGeoName(divName)} ${t('division_suffix')}`;
+        if (divName === currentSelection) opt.selected = true;
         divSelect.appendChild(opt);
     });
 }
 
+/**
+ * Populate District Dropdown based on selected division in the active language
+ */
+function populateDistrictDropdown() {
+    const distSelect = document.getElementById('geo-district-select');
+    if (!distSelect) return;
 
+    const currentSelection = currentGeoFilters.district || 'all';
+    distSelect.innerHTML = `<option value="all">${t('geo_all_districts')}</option>`;
+
+    const selectedDiv = currentGeoFilters.division;
+    if (selectedDiv !== 'all' && geoHierarchy && geoHierarchy[selectedDiv]) {
+        const districts = Object.keys(geoHierarchy[selectedDiv]);
+        districts.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = `${translateGeoName(d)} ${t('district_suffix')}`;
+            if (d === currentSelection) opt.selected = true;
+            distSelect.appendChild(opt);
+        });
+    }
+}
+
+/**
+ * Populate Upazilla Dropdown based on selected district in the active language
+ */
+function populateUpazillaDropdown() {
+    const upaSelect = document.getElementById('geo-upazilla-select');
+    if (!upaSelect) return;
+
+    const currentSelection = currentGeoFilters.upazilla || 'all';
+    upaSelect.innerHTML = `<option value="all">${t('geo_all_upazillas')}</option>`;
+
+    const selectedDiv = currentGeoFilters.division;
+    const selectedDist = currentGeoFilters.district;
+    if (selectedDiv !== 'all' && selectedDist !== 'all' && geoHierarchy && geoHierarchy[selectedDiv] && geoHierarchy[selectedDiv][selectedDist]) {
+        const upazillas = geoHierarchy[selectedDiv][selectedDist];
+        upazillas.forEach(u => {
+            const opt = document.createElement('option');
+            opt.value = u;
+            opt.textContent = `${translateGeoName(u)} ${t('upazilla_suffix')}`;
+            if (u === currentSelection) opt.selected = true;
+            upaSelect.appendChild(opt);
+        });
+    }
+}
 
 /**
  * Handle Division Change -> Update District Selector
  */
 function onDivisionChange() {
     const divSelect = document.getElementById('geo-division-select');
-    const selectedDiv = divSelect.value;
-    currentGeoFilters.division = selectedDiv;
+    currentGeoFilters.division = divSelect ? divSelect.value : 'all';
     currentGeoFilters.district = 'all';
     currentGeoFilters.upazilla = 'all';
 
-    const distSelect = document.getElementById('geo-district-select');
-    distSelect.innerHTML = '<option value="all">All Districts</option>';
-
-    const upaSelect = document.getElementById('geo-upazilla-select');
-    upaSelect.innerHTML = '<option value="all">All Upazillas</option>';
-
-    if (selectedDiv !== 'all' && geoHierarchy && geoHierarchy[selectedDiv]) {
-        const districts = Object.keys(geoHierarchy[selectedDiv]);
-        districts.forEach(d => {
-            const opt = document.createElement('option');
-            opt.value = d;
-            opt.textContent = `${d} District`;
-            distSelect.appendChild(opt);
-        });
-    }
+    populateDistrictDropdown();
+    populateUpazillaDropdown();
 
     applyFilters();
     loadUpazillaAnalytics();
@@ -808,23 +895,10 @@ function onDivisionChange() {
  */
 function onDistrictChange() {
     const distSelect = document.getElementById('geo-district-select');
-    const selectedDist = distSelect.value;
-    currentGeoFilters.district = selectedDist;
+    currentGeoFilters.district = distSelect ? distSelect.value : 'all';
     currentGeoFilters.upazilla = 'all';
 
-    const upaSelect = document.getElementById('geo-upazilla-select');
-    upaSelect.innerHTML = '<option value="all">All Upazillas</option>';
-
-    const selectedDiv = currentGeoFilters.division;
-    if (selectedDiv !== 'all' && selectedDist !== 'all' && geoHierarchy && geoHierarchy[selectedDiv] && geoHierarchy[selectedDiv][selectedDist]) {
-        const upazillas = geoHierarchy[selectedDiv][selectedDist];
-        upazillas.forEach(u => {
-            const opt = document.createElement('option');
-            opt.value = u;
-            opt.textContent = `${u} Upazilla`;
-            upaSelect.appendChild(opt);
-        });
-    }
+    populateUpazillaDropdown();
 
     applyFilters();
     loadUpazillaAnalytics();
@@ -866,10 +940,10 @@ function resetGeoFilters() {
     if (divSelect) divSelect.value = 'all';
 
     const distSelect = document.getElementById('geo-district-select');
-    if (distSelect) distSelect.innerHTML = '<option value="all">All Districts</option>';
+    if (distSelect) distSelect.innerHTML = `<option value="all">${t('geo_all_districts')}</option>`;
 
     const upaSelect = document.getElementById('geo-upazilla-select');
-    if (upaSelect) upaSelect.innerHTML = '<option value="all">All Upazillas</option>';
+    if (upaSelect) upaSelect.innerHTML = `<option value="all">${t('geo_all_upazillas')}</option>`;
 
     const searchInput = document.getElementById('geo-upazilla-search');
     if (searchInput) searchInput.value = '';
@@ -894,7 +968,7 @@ function renderUpazillaLeaderboard(ranking, countrywideTotal) {
                 <td colspan="8" class="text-center py-8 text-slate-400">
                     <div class="flex flex-col items-center justify-center gap-1.5">
                         <i data-lucide="map-pin-off" class="w-6 h-6 text-slate-300"></i>
-                        <span>No road hazard records found for the selected geographic scope.</span>
+                        <span>${t('table_empty_upazilla')}</span>
                     </div>
                 </td>
             </tr>
@@ -925,14 +999,21 @@ function renderUpazillaLeaderboard(ranking, countrywideTotal) {
         }
 
         // Rank Badge
-        let rankBadge = `<span class="w-6 h-6 rounded-full bg-slate-100 text-slate-700 font-black text-xs inline-flex items-center justify-center border border-slate-200">#${item.rank}</span>`;
+        const rankFormatted = formatNumber(item.rank);
+        let rankBadge = `<span class="w-6 h-6 rounded-full bg-slate-100 text-slate-700 font-black text-xs inline-flex items-center justify-center border border-slate-200">#${rankFormatted}</span>`;
         if (item.rank === 1) {
-            rankBadge = `<span class="w-6 h-6 rounded-full bg-rose-600 text-white font-black text-xs inline-flex items-center justify-center shadow-xs">#1</span>`;
+            rankBadge = `<span class="w-6 h-6 rounded-full bg-rose-600 text-white font-black text-xs inline-flex items-center justify-center shadow-xs">#${rankFormatted}</span>`;
         } else if (item.rank === 2) {
-            rankBadge = `<span class="w-6 h-6 rounded-full bg-orange-500 text-white font-black text-xs inline-flex items-center justify-center">#2</span>`;
+            rankBadge = `<span class="w-6 h-6 rounded-full bg-orange-500 text-white font-black text-xs inline-flex items-center justify-center">#${rankFormatted}</span>`;
         } else if (item.rank === 3) {
-            rankBadge = `<span class="w-6 h-6 rounded-full bg-amber-500 text-white font-black text-xs inline-flex items-center justify-center">#3</span>`;
+            rankBadge = `<span class="w-6 h-6 rounded-full bg-amber-500 text-white font-black text-xs inline-flex items-center justify-center">#${rankFormatted}</span>`;
         }
+
+        const upaName = `${translateGeoName(item.upazilla)} ${t('upazilla_suffix')}`;
+        const distName = `${translateGeoName(item.district)} ${t('district_suffix')}`;
+        const divName = `${translateGeoName(item.division)} ${t('division_suffix')}`;
+        const gradeText = translateGrade(item.density_grade);
+        const urgencyText = translateUrgency(item.urgency);
 
         return `
             <tr class="hover:bg-slate-50/80 transition border-b border-slate-100 group">
@@ -946,22 +1027,21 @@ function renderUpazillaLeaderboard(ranking, countrywideTotal) {
                     <div class="font-black text-slate-900 text-xs flex items-center gap-1.5 cursor-pointer hover:text-sky-700 transition" 
                          onclick="selectParticularUpazilla('${item.upazilla}', '${item.district}', '${item.division}')">
                         <i data-lucide="map-pin" class="w-3.5 h-3.5 text-rose-500 shrink-0"></i>
-                        <span>${item.upazilla} Upazilla</span>
+                        <span>${upaName}</span>
                     </div>
-
                 </td>
 
                 <!-- District & Division -->
                 <td class="py-3 px-3.5 text-xs text-slate-600">
-                    <div class="font-semibold text-slate-800">${item.district} District</div>
-                    <div class="text-[10px] text-slate-400">${item.division} Division</div>
+                    <div class="font-semibold text-slate-800">${distName}</div>
+                    <div class="text-[10px] text-slate-400">${divName}</div>
                 </td>
 
                 <!-- Potholes Count -->
                 <td class="py-3 px-3.5 text-center">
                     <div class="inline-flex items-baseline gap-1 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200">
-                        <span class="text-sm font-black text-slate-900">${item.total_hazards}</span>
-                        <span class="text-[10px] text-slate-400 font-medium">defects</span>
+                        <span class="text-sm font-black text-slate-900">${formatNumber(item.total_hazards)}</span>
+                        <span class="text-[10px] text-slate-400 font-medium">${t('defects_unit')}</span>
                     </div>
                 </td>
 
@@ -971,8 +1051,8 @@ function renderUpazillaLeaderboard(ranking, countrywideTotal) {
                         ? `<div class="text-base font-black text-slate-400 tracking-tight flex items-center justify-center">0%</div>`
                         : `<div>
                             <div class="flex items-center justify-between text-xs mb-1">
-                                <span class="font-black text-slate-900 text-sm">${item.density_percentage}%</span>
-                                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded border ${badgeClass}">${item.density_grade}</span>
+                                <span class="font-black text-slate-900 text-sm">${formatNumber(item.density_percentage)}%</span>
+                                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded border ${badgeClass}">${gradeText}</span>
                             </div>
                             <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200/80">
                                 <div class="${barColor} h-full rounded-full transition-all duration-500" style="width: ${Math.max(6, item.density_relative_pct)}%"></div>
@@ -984,36 +1064,36 @@ function renderUpazillaLeaderboard(ranking, countrywideTotal) {
                 <!-- Severity Profile -->
                 <td class="py-3 px-3.5 text-center">
                     ${item.total_hazards === 0 
-                        ? `<span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">All Clear (0)</span>`
+                        ? `<span class="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">${t('all_clear_count')}</span>`
                         : `<div class="inline-flex items-center gap-1 text-[10px] font-bold">
-                            ${item.critical_count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200" title="Critical">${item.critical_count} Crit</span>` : ''}
-                            ${item.high_count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-200" title="High">${item.high_count} High</span>` : ''}
-                            ${item.medium_count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200" title="Medium">${item.medium_count} Med</span>` : ''}
-                            ${item.low_count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200" title="Low">${item.low_count} Low</span>` : ''}
+                            ${item.critical_count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200" title="Critical">${formatNumber(item.critical_count)} ${currentAppLang === 'bn' ? 'মারাত্মক' : 'Crit'}</span>` : ''}
+                            ${item.high_count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-orange-50 text-orange-700 border border-orange-200" title="High">${formatNumber(item.high_count)} ${currentAppLang === 'bn' ? 'উচ্চ' : 'High'}</span>` : ''}
+                            ${item.medium_count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200" title="Medium">${formatNumber(item.medium_count)} ${currentAppLang === 'bn' ? 'মাঝারি' : 'Med'}</span>` : ''}
+                            ${item.low_count > 0 ? `<span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200" title="Low">${formatNumber(item.low_count)} ${currentAppLang === 'bn' ? 'সাধারণ' : 'Low'}</span>` : ''}
                         </div>`
                     }
                 </td>
 
                 <!-- Repair Urgency -->
                 <td class="py-3 px-3.5 text-xs text-slate-700">
-                    <div class="font-bold truncate max-w-[160px]" title="${item.urgency}">${item.urgency}</div>
-                    <div class="text-[10px] text-slate-400">${item.pending_count} pending inspection</div>
+                    <div class="font-bold truncate max-w-[160px]" title="${urgencyText}">${urgencyText}</div>
+                    <div class="text-[10px] text-slate-400">${formatNumber(item.pending_count)} ${t('pending_inspection_unit')}</div>
                 </td>
 
                 <!-- Actions -->
                 <td class="py-3 px-3.5 text-right">
                     <div class="inline-flex items-center gap-1.5">
                         <button type="button" onclick="focusUpazilla(${item.centroid_lat}, ${item.centroid_lng}, '${item.upazilla}')" 
-                                class="px-2.5 py-1 rounded-md text-[11px] font-bold bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 transition flex items-center gap-1 shadow-2xs"
-                                title="Center and Zoom Map on ${item.upazilla}">
+                                class="px-2.5 py-1 rounded-md text-[11px] font-bold bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                                title="${t('btn_map')}">
                             <i data-lucide="navigation" class="w-3 h-3"></i>
-                            <span>Map</span>
+                            <span>${t('btn_map')}</span>
                         </button>
                         <button type="button" onclick="filterTableToUpazilla('${item.upazilla}')" 
-                                class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition flex items-center gap-1"
-                                title="View all potholes in ${item.upazilla}">
+                                class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 transition flex items-center gap-1 cursor-pointer"
+                                title="${t('btn_records')}">
                             <i data-lucide="list-filter" class="w-3 h-3"></i>
-                            <span>Records</span>
+                            <span>${t('btn_records')}</span>
                         </button>
                     </div>
                 </td>
@@ -1038,41 +1118,40 @@ function renderParticularUpazillaCard(stat) {
 
     card.classList.remove('hidden');
 
-    document.getElementById('particular-name').textContent = `${stat.upazilla} Upazilla`;
-    document.getElementById('particular-region').textContent = `${stat.district} District, ${stat.division} Division`;
-    document.getElementById('particular-density-ratio').textContent = `${stat.density_percentage}%`;
-    document.getElementById('particular-total').textContent = stat.total_hazards;
+    document.getElementById('particular-name').textContent = `${translateGeoName(stat.upazilla)} ${t('upazilla_suffix')}`;
+    document.getElementById('particular-region').textContent = `${translateGeoName(stat.district)} ${t('district_suffix')}, ${translateGeoName(stat.division)} ${t('division_suffix')}`;
+    document.getElementById('particular-density-ratio').textContent = `${formatNumber(stat.density_percentage)}%`;
+    document.getElementById('particular-total').textContent = formatNumber(stat.total_hazards);
 
     const badgeGrade = document.getElementById('particular-badge-grade');
 
     if (stat.total_hazards === 0) {
-        document.getElementById('particular-severity-sub').textContent = 'All Clear • 0 Defects Reported';
-        document.getElementById('particular-status').textContent = '0 Pending (All Clear)';
-        document.getElementById('particular-urgency').textContent = 'Safe Pavement - Routine Monitoring';
-        document.getElementById('particular-roads').textContent = 'No active defects reported on this route';
+        document.getElementById('particular-severity-sub').textContent = t('card_all_clear');
+        document.getElementById('particular-status').textContent = t('card_zero_pending');
+        document.getElementById('particular-urgency').textContent = t('card_safe_pavement');
+        document.getElementById('particular-roads').textContent = t('card_no_active_defects');
         if (badgeGrade) {
-            badgeGrade.textContent = 'ZERO DEFECTS (CLEAR)';
+            badgeGrade.textContent = t('card_badge_zero');
             badgeGrade.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300';
         }
     } else {
-        document.getElementById('particular-severity-sub').textContent = `${stat.critical_count} Critical • ${stat.high_count} High • ${stat.medium_count} Medium`;
-        document.getElementById('particular-status').textContent = `${stat.pending_count} Pending Review`;
-        document.getElementById('particular-urgency').textContent = stat.urgency;
+        document.getElementById('particular-severity-sub').textContent = `${formatNumber(stat.critical_count)} ${t('card_critical')} • ${formatNumber(stat.high_count)} ${t('card_high')} • ${formatNumber(stat.medium_count)} ${t('card_medium')}`;
+        document.getElementById('particular-status').textContent = `${formatNumber(stat.pending_count)} ${t('card_pending_rev')}`;
+        document.getElementById('particular-urgency').textContent = translateUrgency(stat.urgency);
 
         const roadsStr = stat.sample_roads && stat.sample_roads.length > 0 
             ? stat.sample_roads.join(', ') 
-            : 'Active Pavement Route Coordinates';
+            : (currentAppLang === 'bn' ? 'সক্রিয় সড়ক নেটওয়ার্ক রুট' : 'Active Pavement Route Coordinates');
         document.getElementById('particular-roads').textContent = roadsStr;
 
         const crewSub = document.getElementById('particular-crew-sub');
-        if (crewSub) crewSub.textContent = `${stat.in_progress_count || 0} active crew assigned`;
+        if (crewSub) crewSub.textContent = `${formatNumber(stat.in_progress_count || 0)} ${t('card_active_crews')}`;
 
         const actionSub = document.getElementById('particular-action-sub');
-        if (actionSub) actionSub.textContent = `${stat.urgency || 'Inspection priority'}`;
-
+        if (actionSub) actionSub.textContent = `${translateUrgency(stat.urgency) || t('card_action_guideline')}`;
 
         if (badgeGrade) {
-            badgeGrade.textContent = stat.density_grade.toUpperCase();
+            badgeGrade.textContent = translateGrade(stat.density_grade);
             if (stat.density_percentage >= 30) {
                 badgeGrade.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-100 text-rose-700 border border-rose-200';
             } else if (stat.density_percentage >= 15) {

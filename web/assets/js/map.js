@@ -461,7 +461,7 @@ function updateMapMarkers(reports) {
                     <div class="flex items-center justify-between">
                         <span class="font-bold text-slate-900">${report.id}</span>
                         <span class="capitalize text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                            ${(report.status || 'reported').replace('_', ' ')}
+                            ${typeof translateStatus === 'function' ? translateStatus(report.status) : (report.status || 'reported').replace('_', ' ')}
                         </span>
                     </div>
                     <p class="text-slate-600 font-medium" id="osm-road-${report.id}">${report.road_name || 'OpenStreetMap Road Survey Location'}</p>
@@ -470,8 +470,8 @@ function updateMapMarkers(reports) {
                             <span>OpenStreetMap</span>
                             <span>↗</span>
                         </a>
-                        <button onclick="openInspectionModal('${report.id}')" class="text-sky-700 hover:text-sky-900 font-bold underline">
-                            Inspect &rarr;
+                        <button onclick="openInspectionModal('${report.id}')" class="text-sky-700 hover:text-sky-900 font-bold underline cursor-pointer">
+                            ${typeof t === 'function' ? t('popup_inspect') : 'Inspect &rarr;'}
                         </button>
                     </div>
                 </div>
@@ -771,19 +771,19 @@ function updateNearestHazardDisplay() {
     const statusBox = document.getElementById('authority-location-chip');
     if (!statusBox) return;
 
-    let nearestText = "Scanning road hazards...";
+    let nearestText = typeof t === "function" ? t("map_scanning_hazards") : "Scanning road hazards...";
     if (nearest) {
         const distFormatted = nearest.distanceMeters < 1000 
             ? `${Math.round(nearest.distanceMeters)}m` 
             : `${(nearest.distanceMeters / 1000).toFixed(2)}km`;
-        nearestText = `Nearest: <strong class="text-indigo-300">${nearest.report.id}</strong> (${distFormatted})`;
+        nearestText = `${typeof t === "function" ? t("map_nearest") : "Nearest:"} <strong class="text-indigo-300">${nearest.report.id}</strong> (${distFormatted})`;
     }
 
     statusBox.classList.remove('hidden');
     statusBox.classList.add('flex');
     statusBox.innerHTML = `
         <span class="w-2.5 h-2.5 rounded-full bg-sky-500 animate-pulse"></span>
-        <span class="truncate">Live Position: <strong class="text-slate-900">${currentAuthorityAddress}</strong> &bull; ${nearestText}</span>
+        <span class="truncate">${typeof t === "function" ? t("map_live_position") : "Live Position:"} <strong class="text-slate-900">${currentAuthorityAddress}</strong> &bull; ${nearestText}</span>
     `;
 }
 

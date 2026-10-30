@@ -34,10 +34,10 @@ require_once __DIR__ . '/../config/database.php';
         }
     </script>
     
-    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <!-- Google Fonts: Plus Jakarta Sans, Hind Siliguri (Bengali) & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
     <!-- Leaflet GIS Map CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -50,38 +50,49 @@ require_once __DIR__ . '/../config/database.php';
 
     <!-- Custom CSS -->
     <link rel="stylesheet" href="assets/css/style.css?v=<?= time() ?>">
+
+    <!-- Bilingual i18n Translation Engine -->
+    <script src="assets/js/i18n.js?v=<?= time() ?>"></script>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
 
-    <!-- Top Administrative Header -->
-    <header class="sticky top-0 z-50 bg-white border-b border-slate-200/90 shadow-xs">
+    <!-- Top Administrative Header (Enlarged & Prominent) -->
+    <header class="sticky top-0 z-50 bg-white border-b border-slate-200/90 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-20">
+            <div class="flex items-center justify-between min-h-[96px] py-3.5 sm:py-4">
                 
-                <!-- Logo & Civic Title -->
-                <div class="flex items-center gap-3.5">
-                    <img src="assets/images/logo.png" alt="SorokSurokkha Logo" class="w-13 h-13 sm:w-14 sm:h-14 object-contain">
+                <!-- Logo & Civic Title (Enlarged) -->
+                <div class="flex items-center gap-4 sm:gap-5">
+                    <img src="assets/images/logo.png" alt="SorokSurokkha Logo" class="w-16 h-16 sm:w-20 sm:h-20 object-contain drop-shadow-xs">
                     <div class="flex flex-col">
-                        <div class="flex items-center gap-2">
-                            <span class="text-xl font-extrabold text-slate-900 tracking-tight">SorokSurokkha</span>
-                            <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200">
+                        <div class="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+                            <span class="text-2xl sm:text-3xl lg:text-4xl font-black text-slate-900 tracking-tight" data-i18n="app_title">SorokSurokkha</span>
+                            <span class="text-xs sm:text-sm font-extrabold uppercase tracking-wider px-2.5 sm:px-3 py-1 rounded-lg bg-sky-50 text-sky-700 border border-sky-200 shadow-2xs" data-i18n="authority_badge">
                                 Road Authority
                             </span>
                         </div>
-                        <span class="text-[11px] text-slate-500 font-medium hidden sm:block">Hazard Monitoring & Pothole Repair Management</span>
+                        <span class="text-xs sm:text-sm text-slate-500 font-semibold hidden sm:block mt-0.5" data-i18n="app_subtitle">Hazard Monitoring & Pothole Repair Management</span>
                     </div>
                 </div>
 
-                <!-- Right Utility Bar -->
-                <div class="flex items-center gap-3">
-                    <div class="hidden md:flex items-center gap-2 px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
-                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span>Live Sync Active</span>
+                <!-- Right Utility Bar (Enlarged) -->
+                <div class="flex items-center gap-3.5 sm:gap-4">
+                    <!-- Segment of language changing (বাংলা / English) -->
+                    <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 select-none shadow-xs" role="group" aria-label="Language Selector">
+                        <button type="button" id="lang-btn-bn" onclick="setAppLanguage('bn')" 
+                                class="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 font-bold text-sm sm:text-base text-slate-600 hover:text-slate-900 cursor-pointer">
+                            <span>বাংলা</span>
+                        </button>
+                        <button type="button" id="lang-btn-en" onclick="setAppLanguage('en')" 
+                                class="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 font-bold text-sm sm:text-base text-slate-600 hover:text-slate-900 cursor-pointer">
+                            <span>English</span>
+                        </button>
                     </div>
 
-                    <a href="index.php" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white transition shadow-sm">
-                        <i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i>
-                        <span>Dashboard</span>
+                    <!-- Dashboard Action Button -->
+                    <a href="index.php" class="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white transition shadow-sm cursor-pointer">
+                        <i data-lucide="layout-dashboard" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+                        <span data-i18n="nav_dashboard">Dashboard</span>
                     </a>
                 </div>
 
