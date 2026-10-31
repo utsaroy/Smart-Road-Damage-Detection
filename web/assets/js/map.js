@@ -547,14 +547,45 @@ function fitAllHazardsOnMap(animate = true) {
  * 4. Fly directly to a specific report
  */
 function flyToReport(reportId) {
-    const marker = markerInstances[reportId];
-    if (marker && hazardMap) {
-        const latLng = marker.getLatLng();
+    if (!hazardMap) return;
+
+    let marker = markerInstances[reportId];
+    let latLng = null;
+
+    if (marker) {
+        latLng = marker.getLatLng();
+    } else {
+        const rep = (typeof allReports !== 'undefined' ? allReports : []).find(x => x.id === reportId);
+        if (rep && rep.latitude && rep.longitude) {
+            latLng = [parseFloat(rep.latitude), parseFloat(rep.longitude)];
+        }
+    }
+
+    if (latLng) {
         userHasInteracted = true;
-        hazardMap.flyTo(latLng, 17, { animate: true, duration: 0.8 });
+        // 1. Smoothly scroll into the GIS map canvas
+        const mapSection = document.getElementById('hazard-map');
+        if (mapSection) {
+            mapSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        // 2. Fly camera smoothly to exact coordinates
+        hazardMap.flyTo(latLng, 17.5, { animate: true, duration: 0.9 });
+
+        // 3. Open the interactive marker popup with details
         setTimeout(() => {
-            marker.openPopup();
-        }, 850);
+            if (marker) {
+                marker.openPopup();
+            }
+        }, 900);
+
+        // 4. Show confirmation notification toast
+        if (typeof showToast === 'function') {
+            const rep = (typeof allReports !== 'undefined' ? allReports : []).find(x => x.id === reportId);
+            const locName = rep ? `${typeof translateGeoName === 'function' ? translateGeoName(rep.upazilla || '') : (rep.upazilla || '')}, ${typeof translateGeoName === 'function' ? translateGeoName(rep.district || '') : (rep.district || '')}` : reportId;
+            const prefix = typeof t === 'function' ? t('toast_focused_map') : '📍 Focused GIS Map on ';
+            showToast(`${prefix}${locName}`);
+        }
     }
 }
 

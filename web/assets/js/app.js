@@ -278,7 +278,9 @@ function renderTable(reports) {
                 <!-- Location & GPS -->
                 <td class="py-3 px-4">
                     <div class="flex items-center gap-1.5 mb-1">
-                        <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                        <span onclick="flyToReport('${r.id}')" 
+                              title="${currentAppLang === 'bn' ? 'ম্যাপে সরাসরি এই অবস্থানটি দেখুন' : 'Click to view on live map'}"
+                              class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 transition cursor-pointer whitespace-nowrap">
                             <i data-lucide="map-pin" class="w-3 h-3 text-sky-600"></i>
                             <span>${upazillaText}, ${districtText}</span>
                         </span>

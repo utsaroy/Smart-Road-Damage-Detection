@@ -159,6 +159,9 @@ try {
 
         // 8. Location Details & Upazilla Resolution
         $address = trim($params['address'] ?? $params['road_name'] ?? '');
+        if ($address === 'Location unavailable') {
+            $address = '';
+        }
         $road_name = !empty($address) ? $address : 'Road GPS (' . round($latitude, 5) . ', ' . round($longitude, 5) . ')';
         $landmark = trim($params['landmark'] ?? '');
 
