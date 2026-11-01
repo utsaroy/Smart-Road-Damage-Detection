@@ -4,10 +4,24 @@
  * Professional Civic & Municipal Light Design - Bilingual (English / বাংলা)
  */
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/includes/auth.php';
+
+// Auth check: Must be logged in, otherwise redirect to login.php
+$currentUser = Auth::requireLogin('authority');
+
 require_once __DIR__ . '/includes/header.php';
 ?>
 
 <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+    <script>
+        window.CURRENT_AUTHORITY_USER = {
+            id: <?= json_encode($currentUser['id'] ?? 'auth_admin') ?>,
+            name: <?= json_encode($currentUser['name'] ?? 'Road Authority Engineer') ?>,
+            role: <?= json_encode($currentUser['role'] ?? 'authority') ?>,
+            upazilla: <?= json_encode($currentUser['upazilla'] ?? '') ?>,
+            district: <?= json_encode($currentUser['district'] ?? '') ?>
+        };
+    </script>
 
     <!-- KPI Metric Summary Tiles -->
     <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
@@ -403,6 +417,87 @@ require_once __DIR__ . '/includes/header.php';
         </div>
     </section>
 
+    <!-- VERIFIED REPAIRED POTHOLES SEGMENT (ENGINEERING SIGN-OFF ARCHIVE) -->
+    <section id="verified-repaired-section" class="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-sm space-y-5">
+        <!-- Section Header -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-200 shadow-2xs">
+                    <i data-lucide="badge-check" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h3 class="text-base sm:text-lg font-bold text-slate-900" id="heading-verified-potholes">
+                        Verified Repaired Potholes
+                    </h3>
+                    <p class="text-xs text-slate-500" id="sub-verified-potholes">
+                        Official log of field-repaired hazards inspected and certified with before-and-after proof.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Two Options Toggle: Verified By Me vs Verified By Others (Whole Bangladesh) -->
+            <div class="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200 select-none shadow-2xs">
+                <button type="button" id="btn-verified-me" onclick="setVerifiedTab('me')"
+                        class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer bg-white text-emerald-800 shadow-xs">
+                    <i data-lucide="user-check" class="w-4 h-4 text-emerald-600"></i>
+                    <span id="txt-verified-by-me">Verified by Me</span>
+                    <span id="badge-count-verified-me" class="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">0</span>
+                </button>
+                <button type="button" id="btn-verified-others" onclick="setVerifiedTab('others')"
+                        class="px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer text-slate-600 hover:text-slate-900">
+                    <i data-lucide="globe" class="w-4 h-4 text-slate-500"></i>
+                    <span id="txt-verified-by-others">Verified by Others (Whole Bangladesh)</span>
+                    <span id="badge-count-verified-others" class="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-700">0</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter & Search Controls: Upazillawise search option -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
+            <div class="flex items-center gap-2 flex-wrap">
+                <div class="relative min-w-[200px]">
+                    <select id="verified-upazilla-filter" onchange="renderVerifiedPotholesTable()"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none focus:border-emerald-500 transition cursor-pointer">
+                        <option value="all">All Upazillas (সমগ্র উপজেলা)</option>
+                    </select>
+                </div>
+                <span class="text-xs text-slate-500 font-medium" id="verified-records-summary">Showing 0 verified records</span>
+            </div>
+
+            <!-- Search inside verified segment -->
+            <div class="relative min-w-[260px]">
+                <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
+                <input type="text" id="verified-search-input" oninput="renderVerifiedPotholesTable()"
+                       placeholder="Search by ID, Road, Verifier, Crew..."
+                       class="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 transition">
+            </div>
+        </div>
+
+        <!-- Verified Repaired Table -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead class="bg-slate-50/80 text-[11px] font-bold uppercase text-slate-500 border-b border-slate-200">
+                    <tr>
+                        <th class="py-3 px-4" id="th-v-repaired-photo">Repaired Photo</th>
+                        <th class="py-3 px-4" id="th-v-original-photo">Before Repair</th>
+                        <th class="py-3 px-4" id="th-v-id-road">Defect ID & Road</th>
+                        <th class="py-3 px-4" id="th-v-location">Upazilla & District</th>
+                        <th class="py-3 px-4" id="th-v-repaired-by">Repaired by Crew</th>
+                        <th class="py-3 px-4" id="th-v-verified-by">Verified by Authority</th>
+                        <th class="py-3 px-4 text-right" id="th-v-actions">Map Action</th>
+                    </tr>
+                </thead>
+                <tbody id="verified-table-body" class="divide-y divide-slate-100">
+                    <tr>
+                        <td colspan="7" class="text-center py-8 text-slate-400">
+                            No verified repaired potholes in this view.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
 </main>
 
 <!-- Detailed Inspection Modal (Clean Administrative Modal) -->
@@ -620,7 +715,188 @@ require_once __DIR__ . '/includes/header.php';
 </div>
 
 <!-- Load Application JS -->
+
+<!-- ================= ASSIGN CONSTRUCTION CREW MODAL ================= -->
+<div id="assign-crew-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-8">
+        
+        <div class="p-4 sm:p-5 bg-gradient-to-r from-amber-500 to-amber-600 text-white flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <i data-lucide="hard-hat" class="w-5 h-5"></i>
+                <div>
+                    <h3 class="font-bold text-base sm:text-lg" id="assign-modal-title">Assign Construction Crew</h3>
+                    <p class="text-xs text-amber-100" id="assign-modal-sub">Select an active repair crew in this Upazilla</p>
+                </div>
+            </div>
+            <button type="button" onclick="closeAssignCrewModal()" class="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <form id="form-assign-crew" onsubmit="submitAssignCrew(event)" class="p-5 space-y-4">
+            <input type="hidden" id="assign-report-id">
+            <input type="hidden" id="assign-upazilla">
+            <input type="hidden" id="assign-district">
+
+            <!-- Defect Summary Card -->
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center gap-3">
+                <img id="assign-defect-img" src="" alt="Defect" class="w-14 h-14 rounded-lg object-cover border border-slate-300 shrink-0" onerror="this.src='uploads/potholes/rpt-1792217799588.jpg'">
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2">
+                        <span class="font-bold text-slate-900 text-xs" id="assign-defect-id">RPT-XXXX</span>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold" id="assign-defect-sev">HIGH</span>
+                    </div>
+                    <div class="text-xs text-slate-700 font-semibold truncate mt-0.5" id="assign-defect-loc">Khan Jahan Ali, Khulna</div>
+                    <div class="text-[11px] text-slate-500 truncate" id="assign-defect-road">Road Name</div>
+                </div>
+            </div>
+
+            <!-- Crew Selection List -->
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5 flex items-center justify-between">
+                    <span>Available Crews in <strong id="assign-target-upazilla" class="text-amber-700"></strong></span>
+                    <span class="text-[11px] text-slate-400 font-normal">Choose one crew to dispatch</span>
+                </label>
+                
+                <div id="assign-crews-list" class="space-y-2 max-h-52 overflow-y-auto pr-1">
+                    <!-- Populated dynamically via api/get_crews.php?upazilla=... -->
+                </div>
+            </div>
+
+            <!-- Scheduled Repair Date -->
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Scheduled Repair Date</label>
+                <input type="date" id="assign-scheduled-date" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-amber-500">
+            </div>
+
+            <!-- Directives / Notes -->
+            <div>
+                <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">Directives / Repair Instructions</label>
+                <textarea id="assign-notes" rows="2" placeholder="e.g. Priority repair before weekend traffic. Use cold mix compaction."
+                          class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs text-slate-900 focus:outline-none focus:border-amber-500"></textarea>
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button type="button" onclick="closeAssignCrewModal()" class="px-4 py-2 text-xs font-bold text-slate-600 hover:text-slate-800 transition cursor-pointer">
+                    Cancel
+                </button>
+                <button type="submit" id="btn-confirm-assign"
+                        class="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                    <i data-lucide="user-check" class="w-4 h-4"></i>
+                    <span>Confirm Crew Assignment</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script src="assets/js/map.js?v=<?= time() ?>"></script>
 <script src="assets/js/app.js?v=<?= time() ?>"></script>
 
 <?php require_once __DIR__ . '/includes/footer.php'; ?>
+
+<!-- Modal: View Repaired Photo & Sign-off Verification -->
+<div id="repaired-photo-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full max-h-[92vh] overflow-y-auto shadow-2xl p-6 text-slate-800 space-y-5">
+        <!-- Top bar -->
+        <div class="flex items-start justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center border border-emerald-200">
+                    <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900" id="rpm-title">
+                        Repair Completion Proof & Engineering Verification
+                    </h3>
+                    <p class="text-xs text-slate-500" id="rpm-sub">
+                        Inspect the contractor crew's uploaded field photo before issuing final certification.
+                    </p>
+                </div>
+            </div>
+            <button onclick="closeRepairedPhotoModal()" class="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition text-lg font-semibold cursor-pointer">
+                &times;
+            </button>
+        </div>
+
+        <input type="hidden" id="rpm-report-id" value="">
+
+        <!-- Side-by-side Before & After Photos -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <!-- Left: Before Repair (Damaged) -->
+            <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-xs font-bold text-rose-700">
+                    <span class="flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> <span id="rpm-lbl-before">1. Initial Damaged Pothole</span></span>
+                    <span id="rpm-before-date" class="text-[10px] text-slate-400 font-normal">--</span>
+                </div>
+                <div class="relative h-60 rounded-xl overflow-hidden bg-slate-900 border border-slate-200 shadow-inner group">
+                    <img id="rpm-img-before" src="" alt="Before Repair" class="w-full h-full object-cover">
+                    <span class="absolute bottom-2 left-2 bg-slate-950/80 text-white text-[10px] px-2 py-0.5 rounded font-mono">
+                        Before Repair
+                    </span>
+                </div>
+            </div>
+
+            <!-- Right: After Repair (Repaired Proof Photo) -->
+            <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-xs font-bold text-emerald-700">
+                    <span class="flex items-center gap-1"><i data-lucide="check-check" class="w-3.5 h-3.5"></i> <span id="rpm-lbl-after">2. Uploaded Repaired Photo</span></span>
+                    <span id="rpm-after-date" class="text-[10px] text-emerald-600 font-semibold">Repaired</span>
+                </div>
+                <div class="relative h-60 rounded-xl overflow-hidden bg-slate-900 border-2 border-emerald-500 shadow-inner group">
+                    <img id="rpm-img-after" src="" alt="Repaired Photo Proof" class="w-full h-full object-cover">
+                    <span class="absolute bottom-2 left-2 bg-emerald-700 text-white text-[10px] px-2 py-0.5 rounded font-bold">
+                        Repaired Proof
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Defect & Crew Details Card -->
+        <div class="bg-slate-50 rounded-xl p-4 border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div>
+                <span class="text-[10px] font-bold uppercase text-slate-400 block" id="rpm-lbl-defect">Defect ID & Road</span>
+                <strong id="rpm-id-road" class="text-slate-900 block truncate">RPT-XXXX</strong>
+                <span id="rpm-coords" class="text-[11px] font-mono text-sky-700 block mt-0.5">0.0, 0.0</span>
+            </div>
+            <div>
+                <span class="text-[10px] font-bold uppercase text-slate-400 block" id="rpm-lbl-crew">Repaired By Crew</span>
+                <strong id="rpm-crew" class="text-amber-800 block truncate">Crew Name</strong>
+                <span id="rpm-repair-date" class="text-[11px] text-slate-500 block mt-0.5">--</span>
+            </div>
+            <div>
+                <span class="text-[10px] font-bold uppercase text-slate-400 block" id="rpm-lbl-location">Location</span>
+                <strong id="rpm-location" class="text-slate-900 block truncate">Upazilla, District</strong>
+                <span id="rpm-severity" class="inline-block mt-0.5 text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700">HIGH</span>
+            </div>
+        </div>
+
+        <!-- Optional Authority Verification Notes -->
+        <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1" id="rpm-lbl-notes">
+                Engineering Sign-off Notes (Optional)
+            </label>
+            <input type="text" id="rpm-verify-notes"
+                   placeholder="e.g. Field inspection confirmed. Compaction verified with smooth surface finish."
+                   class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <!-- Action Footer -->
+        <div class="flex items-center justify-between pt-3 border-t border-slate-100 flex-wrap gap-2">
+            <button type="button" onclick="flyToReportFromModal()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200 flex items-center gap-1.5 cursor-pointer transition">
+                <i data-lucide="map" class="w-3.5 h-3.5"></i>
+                <span id="rpm-btn-map">View on GIS Map</span>
+            </button>
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="closeRepairedPhotoModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:text-slate-800 transition cursor-pointer" id="rpm-btn-cancel">
+                    Cancel
+                </button>
+                <button type="button" onclick="confirmFinalVerification()" id="rpm-btn-verify"
+                        class="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-md flex items-center gap-1.5 cursor-pointer">
+                    <i data-lucide="shield-check" class="w-4 h-4"></i>
+                    <span id="rpm-btn-verify-text">Approve & Mark as Verified</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

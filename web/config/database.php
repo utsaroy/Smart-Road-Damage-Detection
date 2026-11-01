@@ -78,10 +78,35 @@ class Database {
             "division TEXT",
             "upazilla TEXT",
             "user_name TEXT DEFAULT 'App User'",
-            "device_model TEXT DEFAULT 'Android Device'"
+            "device_model TEXT DEFAULT 'Android Device'",
+            "assigned_crew_id TEXT",
+            "assigned_at DATETIME",
+            "repair_completed_at DATETIME",
+            "verified_by_id TEXT",
+            "verified_by_name TEXT",
+            "verified_at DATETIME",
+            "verified_notes TEXT"
         ];
         foreach ($cols as $col) {
             try { $pdo->exec("ALTER TABLE pothole_reports ADD COLUMN {$col}"); } catch (Throwable $e) {}
         }
+
+        // Users & Crews authentication table
+        $sqlUsers = "
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'crew',
+            division TEXT,
+            district TEXT,
+            upazilla TEXT,
+            phone TEXT,
+            team_name TEXT,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );";
+        $pdo->exec($sqlUsers);
     }
 }

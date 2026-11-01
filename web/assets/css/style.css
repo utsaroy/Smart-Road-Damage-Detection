@@ -29,7 +29,8 @@ code, pre, .font-mono {
 }
 
 /* Map Container */
-#hazard-map {
+#hazard-map,
+#crew-hazard-map {
     width: 100%;
     height: 500px;
     border-radius: 0.75rem;

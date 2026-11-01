@@ -425,8 +425,9 @@ function updateMapMarkers(reports) {
 
         bounds.push([lat, lng]);
 
-        const isResolved = report.status === 'resolved';
-        const color = getSeverityColor(report.severity, isResolved);
+        const isVerified = (report.status || '').toLowerCase() === 'verified';
+        const isResolved = isVerified || (report.status || '').toLowerCase() === 'resolved';
+        const color = isVerified ? '#059669' : getSeverityColor(report.severity, isResolved);
 
         const radiusMeters = report.severity === 'CRITICAL' ? 35 : (report.severity === 'HIGH' ? 25 : 18);
         const circle = L.circle([lat, lng], {
@@ -439,40 +440,93 @@ function updateMapMarkers(reports) {
         });
         circlesLayer.addLayer(circle);
 
-        const pinIcon = createCustomPin(report.severity, isResolved);
+        const pinIcon = isVerified ? L.divIcon({
+            className: 'custom-leaflet-marker-verified',
+            html: `
+                <div style="
+                    width: 26px;
+                    height: 26px;
+                    border-radius: 50%;
+                    background: #059669;
+                    border: 3px solid #ffffff;
+                    box-shadow: 0 4px 12px rgba(5,150,105,0.6);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    color: white;
+                    font-size: 13px;
+                    font-weight: bold;
+                ">✓</div>
+            `,
+            iconSize: [26, 26],
+            iconAnchor: [13, 13],
+            popupAnchor: [0, -16]
+        }) : createCustomPin(report.severity, isResolved);
+
         const marker = L.marker([lat, lng], { icon: pinIcon });
         const osmDirectUrl = `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=18/${lat}/${lng}`;
 
+        // When verified, display the verified repaired photo replacing the old previous photo!
+        const displayPhoto = (isVerified && report.repair_image_url) 
+            ? report.repair_image_url 
+            : (report.image_url || 'uploads/potholes/rpt-1792217799588.jpg');
+
+        const isBn = (typeof currentAppLang !== 'undefined' && currentAppLang === 'bn');
+
         const popupHtml = `
-            <div class="w-68 overflow-hidden rounded-xl bg-white text-slate-800 text-xs shadow-md border border-slate-100">
-                <div class="relative h-28 bg-slate-100 overflow-hidden">
-                    <img src="${report.image_url || 'uploads/potholes/rpt-1792217799588.jpg'}" 
+            <div class="w-72 overflow-hidden rounded-xl bg-white text-slate-800 text-xs shadow-md border border-slate-100 font-sans">
+                <div class="relative h-32 bg-slate-900 overflow-hidden">
+                    <img src="${displayPhoto}" 
                          alt="Pothole" 
                          class="w-full h-full object-cover"
                          onerror="this.src='uploads/potholes/rpt-1792217799588.jpg'">
-                    <span class="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${getSeverityBadgeClass(report.severity)}">
-                        ${report.severity}
-                    </span>
+                    ${isVerified ? `
+                        <span class="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white shadow-xs flex items-center gap-1">
+                            <span>✅ ${isBn ? 'যাচাইকৃত মেরামত' : 'VERIFIED REPAIRED'}</span>
+                        </span>
+                    ` : `
+                        <span class="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${getSeverityBadgeClass(report.severity)}">
+                            ${report.severity}
+                        </span>
+                    `}
                     <span class="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-slate-900/80 backdrop-blur text-[10px] text-white font-mono">
                         ${report.confidence_pct || Math.round(report.confidence * 100)}% Conf.
                     </span>
                 </div>
                 <div class="p-3 space-y-2">
                     <div class="flex items-center justify-between">
-                        <span class="font-bold text-slate-900">${report.id}</span>
-                        <span class="capitalize text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">
-                            ${typeof translateStatus === 'function' ? translateStatus(report.status) : (report.status || 'reported').replace('_', ' ')}
+                        <span class="font-bold text-slate-900 font-mono">${report.id}</span>
+                        <span class="capitalize text-[10px] px-2 py-0.5 rounded font-bold ${isVerified ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-700 border border-slate-200'}">
+                            ${isVerified ? (isBn ? 'অনুমোদিত ও সম্পন্ন' : 'Verified & Closed') : (typeof translateStatus === 'function' ? translateStatus(report.status) : (report.status || 'reported').replace('_', ' '))}
                         </span>
                     </div>
                     <p class="text-slate-600 font-medium" id="osm-road-${report.id}">${report.road_name || 'OpenStreetMap Road Survey Location'}</p>
+                    
+                    ${isVerified ? `
+                        <div class="p-2 rounded-lg bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-950 space-y-0.5 mt-1">
+                            <div class="font-bold flex items-center gap-1 text-emerald-900">
+                                <span>🛡️ ${isBn ? 'যাচাইকারী কর্তৃপক্ষ:' : 'Verified by:'}</span>
+                                <span>${report.verified_by_name || 'Road Authority'}</span>
+                            </div>
+                            ${report.verified_at ? `<div class="text-[10px] text-emerald-800">${isBn ? 'অনুমোদনের তারিখ:' : 'Verified on:'} ${report.verified_at}</div>` : ''}
+                            ${report.assigned_crew ? `<div class="text-[10px] text-slate-600">${isBn ? 'মেরামতকারী দল:' : 'Repaired by:'} ${report.assigned_crew.split('(')[0].trim()}</div>` : ''}
+                        </div>
+                    ` : ''}
+
                     <div class="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
                         <a href="${osmDirectUrl}" target="_blank" class="text-sky-600 hover:text-sky-700 font-semibold flex items-center gap-1">
                             <span>OpenStreetMap</span>
                             <span>↗</span>
                         </a>
-                        <button onclick="openInspectionModal('${report.id}')" class="text-sky-700 hover:text-sky-900 font-bold underline cursor-pointer">
-                            ${typeof t === 'function' ? t('popup_inspect') : 'Inspect &rarr;'}
-                        </button>
+                        ${isVerified ? `
+                            <button onclick="openRepairedPhotoInspectionModal('${report.id}')" class="text-emerald-700 hover:text-emerald-900 font-bold underline cursor-pointer">
+                                ${isBn ? 'যাচাইয়ের ছবি &rarr;' : 'Repaired Proof &rarr;'}
+                            </button>
+                        ` : `
+                            <button onclick="openInspectionModal('${report.id}')" class="text-sky-700 hover:text-sky-900 font-bold underline cursor-pointer">
+                                ${typeof t === 'function' ? t('popup_inspect') : 'Inspect &rarr;'}
+                            </button>
+                        `}
                     </div>
                 </div>
             </div>

@@ -4,6 +4,8 @@
  * Professional Civic & Municipal Light Design
  */
 require_once __DIR__ . '/../config/database.php';
+require_once __DIR__ . '/auth.php';
+$authUser = Auth::user();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -57,7 +59,7 @@ require_once __DIR__ . '/../config/database.php';
 <body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
 
     <!-- Top Administrative Header (Enlarged & Prominent) -->
-    <header class="sticky top-0 z-50 bg-white border-b border-slate-200/90 shadow-sm">
+    <header class="sticky top-0 z-[1050] bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between min-h-[96px] py-3.5 sm:py-4">
                 
@@ -76,24 +78,40 @@ require_once __DIR__ . '/../config/database.php';
                 </div>
 
                 <!-- Right Utility Bar (Enlarged) -->
-                <div class="flex items-center gap-3.5 sm:gap-4">
+                <div class="flex items-center gap-3 sm:gap-4 flex-wrap justify-end">
                     <!-- Segment of language changing (বাংলা / English) -->
                     <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 select-none shadow-xs" role="group" aria-label="Language Selector">
                         <button type="button" id="lang-btn-bn" onclick="setAppLanguage('bn')" 
-                                class="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 font-bold text-sm sm:text-base text-slate-600 hover:text-slate-900 cursor-pointer">
+                                class="px-3 sm:px-4 py-2 rounded-lg transition-all duration-150 flex items-center gap-1.5 font-bold text-xs sm:text-sm text-slate-600 hover:text-slate-900 cursor-pointer">
                             <span>বাংলা</span>
                         </button>
                         <button type="button" id="lang-btn-en" onclick="setAppLanguage('en')" 
-                                class="px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-lg transition-all duration-150 flex items-center gap-1.5 font-bold text-sm sm:text-base text-slate-600 hover:text-slate-900 cursor-pointer">
+                                class="px-3 sm:px-4 py-2 rounded-lg transition-all duration-150 flex items-center gap-1.5 font-bold text-xs sm:text-sm text-slate-600 hover:text-slate-900 cursor-pointer">
                             <span>English</span>
                         </button>
                     </div>
 
-                    <!-- Dashboard Action Button -->
-                    <a href="index.php" class="px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl text-sm sm:text-base font-bold flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white transition shadow-sm cursor-pointer">
-                        <i data-lucide="layout-dashboard" class="w-4 h-4 sm:w-5 sm:h-5"></i>
-                        <span data-i18n="nav_dashboard">Dashboard</span>
-                    </a>
+
+
+                    <?php if ($authUser): ?>
+                        <!-- User Profile Info & Logout -->
+                        <div class="flex items-center gap-2">
+                            <div class="hidden md:flex flex-col text-right">
+                                <span class="text-xs font-bold text-slate-800 leading-tight"><?= htmlspecialchars($authUser['name']) ?></span>
+                                <span class="text-[10px] text-slate-400 font-semibold uppercase tracking-wider"><?= htmlspecialchars($authUser['role']) ?></span>
+                            </div>
+                            <button type="button" onclick="handleAuthorityLogout()" title="Sign Out"
+                                    class="p-2 sm:px-3 sm:py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer">
+                                <i data-lucide="log-out" class="w-4 h-4"></i>
+                                <span class="hidden sm:inline" data-i18n="nav_logout">Logout</span>
+                            </button>
+                        </div>
+                    <?php else: ?>
+                        <a href="login.php" class="px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 bg-sky-600 hover:bg-sky-500 text-white transition shadow-sm cursor-pointer">
+                            <i data-lucide="log-in" class="w-4 h-4"></i>
+                            <span data-i18n="nav_login">Sign In</span>
+                        </a>
+                    <?php endif; ?>
                 </div>
 
             </div>

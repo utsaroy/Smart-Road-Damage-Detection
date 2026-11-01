@@ -21,6 +21,7 @@ try {
     $report_id = trim($_POST['report_id'] ?? '');
     $status = trim($_POST['status'] ?? '');
     $assigned_crew = trim($_POST['assigned_crew'] ?? '');
+    $assigned_crew_id = trim($_POST['assigned_crew_id'] ?? '');
     $scheduled_date = !empty($_POST['scheduled_repair_date']) ? $_POST['scheduled_repair_date'] : null;
     $notes = trim($_POST['repair_notes'] ?? '');
 
@@ -35,9 +36,72 @@ try {
     $chk->execute([':id' => $report_id]);
     $existing = $chk->fetch();
 
+    if (!$existing) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'error' => "Report {$report_id} not found."]);
+        exit;
+    }
+
+    require_once __DIR__ . '/../includes/auth.php';
+
+    // Permission Enforcement:
+    // Road Authority can change any defect status and assign any crew.
+    // Construction Crew can ONLY change defects assigned to their own ID or Name!
+    $authUser = Auth::user();
+    if ($authUser && $authUser['role'] === 'crew') {
+        $existingCrewId = $existing['assigned_crew_id'] ?? '';
+        $existingCrewName = strtolower($existing['assigned_crew'] ?? '');
+        $currentUserId = $authUser['id'] ?? '';
+        $currentUserName = strtolower($authUser['name'] ?? '');
+
+        $isAssignedToCurrentCrew = ($existingCrewId && $existingCrewId === $currentUserId) ||
+                                   ($currentUserName && strpos($existingCrewName, $currentUserName) !== false);
+
+        if (!$isAssignedToCurrentCrew) {
+            http_response_code(403);
+            echo json_encode([
+                'success' => false,
+                'error' => "Permission Denied: Without authority permission, a crew member can only view other crews' road defects and cannot modify their status."
+            ]);
+            exit;
+        }
+    }
+
     $new_status = !empty($status) ? $status : ($existing['status'] ?? 'detected');
     $new_crew = !empty($assigned_crew) ? $assigned_crew : ($existing['assigned_crew'] ?? null);
+    $new_crew_id = !empty($assigned_crew_id) ? $assigned_crew_id : ($existing['assigned_crew_id'] ?? null);
     $new_notes = !empty($notes) ? $notes : ($existing['repair_notes'] ?? null);
+    $new_sched = !empty($scheduled_date) ? $scheduled_date : ($existing['scheduled_repair_date'] ?? null);
+
+    // Handle timestamps
+    $assigned_at = $existing['assigned_at'] ?? null;
+    if ($new_status === 'assigned' || !empty($new_crew)) {
+        if (empty($assigned_at)) {
+            $assigned_at = date('Y-m-d H:i:s');
+        }
+    }
+
+    $repair_completed_at = $existing['repair_completed_at'] ?? null;
+    if ($new_status === 'resolved' && empty($repair_completed_at)) {
+        $repair_completed_at = date('Y-m-d H:i:s');
+    }
+
+    // Handle verification metadata for Authority sign-off
+    $verified_by_id = $existing['verified_by_id'] ?? null;
+    $verified_by_name = $existing['verified_by_name'] ?? null;
+    $verified_at = $existing['verified_at'] ?? null;
+    $verified_notes = !empty($_POST['verified_notes']) ? trim($_POST['verified_notes']) : ($existing['verified_notes'] ?? null);
+
+    if ($new_status === 'verified') {
+        if ($authUser) {
+            $verified_by_id = $authUser['id'] ?? 'auth_admin';
+            $verified_by_name = $authUser['name'] ?? 'Road Authority Engineer';
+        } else {
+            $verified_by_id = !empty($_POST['verified_by_id']) ? trim($_POST['verified_by_id']) : ($existing['verified_by_id'] ?? 'auth_admin');
+            $verified_by_name = !empty($_POST['verified_by_name']) ? trim($_POST['verified_by_name']) : ($existing['verified_by_name'] ?? 'Road Authority Engineer');
+        }
+        $verified_at = date('Y-m-d H:i:s');
+    }
 
     // Handle repair proof image upload if provided
     $repair_image_url = $existing['repair_image_url'] ?? null;
@@ -49,23 +113,48 @@ try {
         }
     }
 
+    // MANDATORY REPAIR PHOTO ENFORCEMENT:
+    // Without uploading repair photo, status CANNOT be changed to 'resolved' (Repaired)
+    if ($new_status === 'resolved' && empty($repair_image_url)) {
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'error' => "Cannot mark as Repaired: Please upload a Repair Proof Photo first before marking status as Repaired / Resolved."
+        ]);
+        exit;
+    }
+
     // 1. Update SQLite Local Record
     $stmt = $db->prepare("
         UPDATE pothole_reports 
         SET status = :status,
             assigned_crew = :assigned_crew,
+            assigned_crew_id = :assigned_crew_id,
+            assigned_at = :assigned_at,
             scheduled_repair_date = :scheduled_date,
             repair_notes = :notes,
             repair_image_url = :repair_image_url,
+            repair_completed_at = :repair_completed_at,
+            verified_by_id = :verified_by_id,
+            verified_by_name = :verified_by_name,
+            verified_at = :verified_at,
+            verified_notes = :verified_notes,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = :id
     ");
     $stmt->execute([
         ':status' => $new_status,
         ':assigned_crew' => $new_crew,
-        ':scheduled_date' => $scheduled_date,
+        ':assigned_crew_id' => $new_crew_id,
+        ':assigned_at' => $assigned_at,
+        ':scheduled_date' => $new_sched,
         ':notes' => $new_notes,
         ':repair_image_url' => $repair_image_url,
+        ':repair_completed_at' => $repair_completed_at,
+        ':verified_by_id' => $verified_by_id,
+        ':verified_by_name' => $verified_by_name,
+        ':verified_at' => $verified_at,
+        ':verified_notes' => $verified_notes,
         ':id' => $report_id
     ]);
 
@@ -106,7 +195,8 @@ try {
         'report_id' => $report_id,
         'status' => $new_status,
         'assigned_crew' => $new_crew,
-        'scheduled_repair_date' => $scheduled_date,
+        'assigned_crew_id' => $new_crew_id,
+        'scheduled_repair_date' => $new_sched,
         'repair_notes' => $new_notes,
         'repair_image_url' => $repair_image_url,
         'supabase_synced' => $supabase_sync_success

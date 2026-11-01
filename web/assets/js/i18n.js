@@ -8,6 +8,12 @@ const APP_TRANSLATIONS = {
         authority_badge: "Road Authority",
         app_subtitle: "Hazard Monitoring & Pothole Repair Management",
         nav_dashboard: "Dashboard",
+        nav_crew_portal: "Crew Dashboard",
+        nav_logout: "Logout",
+        nav_login: "Sign In",
+        assign_modal_title: "Assign Construction Crew",
+        assign_modal_sub: "Select an active repair crew in this Upazilla",
+        btn_confirm_assign: "Confirm Crew Assignment",
         footer_text: "SorokSurokkha • Road Hazard & Pothole Authority Management Portal",
 
         // KPI Metric Cards
@@ -209,6 +215,12 @@ const APP_TRANSLATIONS = {
         authority_badge: "সড়ক কর্তৃপক্ষ",
         app_subtitle: "সড়ক বিপদ পর্যবেক্ষণ ও গর্ত মেরামত ব্যবস্থাপনা",
         nav_dashboard: "ড্যাশবোর্ড",
+        nav_crew_portal: "নির্মাণ দল পোর্টাল",
+        nav_logout: "লগআউট",
+        nav_login: "সাইন ইন",
+        assign_modal_title: "নির্মাণ ও মেরামত দল নির্ধারণ",
+        assign_modal_sub: "এই উপজেলার সক্রিয় মেরামত দল নির্বাচন করুন",
+        btn_confirm_assign: "অর্পণ নিশ্চিত করুন ও নির্দেশ দিন",
         footer_text: "সড়কসুরক্ষা • সড়ক বিপদ ও গর্ত কর্তৃপক্ষ ব্যবস্থাপনা পোর্টাল",
 
         // KPI Metric Cards

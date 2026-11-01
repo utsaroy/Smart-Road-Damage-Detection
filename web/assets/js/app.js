@@ -10,6 +10,9 @@ function onLanguageChanged(lang) {
     updateAllGeoDropdowns();
     updateGeoActiveBadge();
     applyFilters();
+    populateVerifiedUpazillaFilter(allReports);
+    applyVerifiedSegmentLanguage(lang);
+    renderVerifiedPotholesTable();
     loadUpazillaAnalytics();
     if (currentOpenReportId) {
         openInspectionModal(currentOpenReportId);
@@ -17,6 +20,35 @@ function onLanguageChanged(lang) {
     if (typeof updateMapMarkers === 'function') {
         updateMapMarkers(allReports);
     }
+}
+
+function applyVerifiedSegmentLanguage(lang) {
+    const isBn = (lang === 'bn');
+    const h = document.getElementById('heading-verified-potholes');
+    const s = document.getElementById('sub-verified-potholes');
+    const tMe = document.getElementById('txt-verified-by-me');
+    const tOthers = document.getElementById('txt-verified-by-others');
+
+    if (h) h.textContent = isBn ? 'অনুমোদিত ও যাচাইকৃত সড়ক মেরামতসমূহ' : 'Verified Repaired Potholes';
+    if (s) s.textContent = isBn ? 'মাঠ পর্যায়ে মেরামতকৃত গর্তের প্রমাণ ছবি ও প্রকৌশল যাচাইয়ের সরকারি রেকর্ড।' : 'Official log of field-repaired hazards inspected and certified with before-and-after proof.';
+    if (tMe) tMe.textContent = isBn ? 'আমার অনুমোদিত' : 'Verified by Me';
+    if (tOthers) tOthers.textContent = isBn ? 'অন্যান্যদের অনুমোদিত (সমগ্র বাংলাদেশ)' : 'Verified by Others (Whole Bangladesh)';
+
+    const thRep = document.getElementById('th-v-repaired-photo');
+    const thOrig = document.getElementById('th-v-original-photo');
+    const thId = document.getElementById('th-v-id-road');
+    const thLoc = document.getElementById('th-v-location');
+    const thCrew = document.getElementById('th-v-repaired-by');
+    const thAuth = document.getElementById('th-v-verified-by');
+    const thAct = document.getElementById('th-v-actions');
+
+    if (thRep) thRep.textContent = isBn ? 'মেরামতের ছবি' : 'Repaired Photo';
+    if (thOrig) thOrig.textContent = isBn ? 'পূর্বাবস্থা' : 'Before Repair';
+    if (thId) thId.textContent = isBn ? 'আইডি ও সড়ক' : 'Defect ID & Road';
+    if (thLoc) thLoc.textContent = isBn ? 'উপজেলা ও জেলা' : 'Upazilla & District';
+    if (thCrew) thCrew.textContent = isBn ? 'মেরামতকারী দল' : 'Repaired by Crew';
+    if (thAuth) thAuth.textContent = isBn ? 'যাচাইকারী কর্তৃপক্ষ' : 'Verified by Authority';
+    if (thAct) thAct.textContent = isBn ? 'ম্যাপ পদক্ষেপ' : 'Map Action';
 }
 /**
  * Road Hazard Authority Portal Application Logic - Multi-User System
@@ -85,7 +117,9 @@ async function loadHazardsData() {
             window.latestStatsData = data.stats;
             updateStatsUI(data.stats);
             populateUserFilter(allReports);
+            populateVerifiedUpazillaFilter(allReports);
             applyFilters();
+            renderVerifiedPotholesTable();
             loadUpazillaAnalytics();
         } else {
             console.error('Failed to load hazards:', data.error);
@@ -188,12 +222,15 @@ function applyFilters() {
     document.getElementById('filter-count').textContent = currentAppLang === 'bn' ? `${formatNumber(filtered.length)} / ${formatNumber(allReports.length)} ${t('records_count_suffix')}` : `${filtered.length} of ${allReports.length} records`;
 }
 
-// Render data table with Multi-User Scanner Column
+// Render data table with Multi-User Scanner Column (Verified records are excluded and moved to Verified Segment)
 function renderTable(reports) {
     const tbody = document.getElementById('reports-table-body');
     if (!tbody) return;
 
-    if (reports.length === 0) {
+    // RULE: Active table displays active/in-progress defects only. Verified records are moved to "Verified Repaired Potholes" segment!
+    const activeReports = (reports || []).filter(r => (r.status || '').toLowerCase() !== 'verified');
+
+    if (activeReports.length === 0) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="7" class="text-center py-12 text-slate-500">
@@ -208,7 +245,7 @@ function renderTable(reports) {
         return;
     }
 
-    tbody.innerHTML = reports.map(r => {
+    tbody.innerHTML = activeReports.map(r => {
         const sevClass = getSeverityBadgeClass(r.severity);
         const lat = parseFloat(r.latitude).toFixed(5);
         const lng = parseFloat(r.longitude).toFixed(5);
@@ -300,14 +337,23 @@ function renderTable(reports) {
 
                 <!-- Status Selector -->
                 <td class="py-3 px-4">
-                    <select onchange="updateReportStatus('${r.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium px-2.5 py-1.5 text-slate-800 focus:outline-none focus:bg-white focus:border-sky-500 cursor-pointer">
-                        <option value="reported" ${r.status === 'reported' ? 'selected' : ''}>${t('status_reported')}</option>
-                        <option value="verified" ${r.status === 'verified' ? 'selected' : ''}>${t('status_verified')}</option>
-                        <option value="assigned" ${r.status === 'assigned' ? 'selected' : ''}>${t('status_assigned')}</option>
-                        <option value="under_repair" ${r.status === 'under_repair' ? 'selected' : ''}>${t('status_under_repair')}</option>
-                        <option value="resolved" ${r.status === 'resolved' ? 'selected' : ''}>${t('status_resolved')}</option>
-                    </select>
-                    ${r.assigned_crew ? `<div class="text-[10px] text-slate-500 mt-1 truncate max-w-[150px]">${t('crew_label')} ${r.assigned_crew}</div>` : ''}
+                    <div class="flex flex-col gap-1">
+                        <select onchange="updateReportStatus('${r.id}', this.value)" class="bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium px-2.5 py-1.5 text-slate-800 focus:outline-none focus:bg-white focus:border-sky-500 cursor-pointer shadow-2xs">
+                            <option value="reported" ${r.status === 'reported' ? 'selected' : ''}>⏳ ${t('status_reported')}</option>
+                            <option value="assigned" ${r.status === 'assigned' ? 'selected' : ''}>👷 ${t('status_assigned')}</option>
+                            <option value="under_repair" ${r.status === 'under_repair' || r.status === 'in_progress' ? 'selected' : ''}>🔧 ${t('status_under_repair')}</option>
+                            <option value="resolved" ${r.status === 'resolved' ? 'selected' : ''}>✅ ${t('status_resolved')}</option>
+                            <option value="verified" ${r.status === 'verified' ? 'selected' : ''}>🌟 ${t('status_verified')}</option>
+                        </select>
+                        ${r.assigned_crew ? `<div class="text-[10px] text-slate-500 mt-0.5 truncate max-w-[160px]" title="${r.assigned_crew}">${t('crew_label')} ${r.assigned_crew}</div>` : ''}
+                        ${(r.status === 'resolved' || r.repair_image_url) ? `
+                            <button type="button" onclick="openRepairedPhotoInspectionModal('${r.id}')"
+                                    class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 text-[11px] font-bold shadow-2xs cursor-pointer transition w-fit mt-1">
+                                <i data-lucide="image" class="w-3 h-3 text-emerald-600"></i>
+                                <span>${currentAppLang === 'bn' ? 'মেরামতের ছবি দেখুন' : 'View Repaired Photo'}</span>
+                            </button>
+                        ` : ''}
+                    </div>
                 </td>
 
                 <!-- Actions -->
@@ -350,12 +396,26 @@ function getUserAvatarBg(name) {
     return colors[Math.abs(hash) % colors.length];
 }
 
-// Quick status change from dropdown
-async function updateReportStatus(reportId, newStatus) {
+// Quick status change from dropdown & Verification Sign-Off
+async function updateReportStatus(reportId, newStatus, customNotes = '') {
+    // If authority selects 'assigned', pop up the Upazilla Crew Assignment Modal
+    if (newStatus === 'assigned') {
+        openAssignCrewModal(reportId);
+        return;
+    }
+
     try {
         const formData = new FormData();
         formData.append('report_id', reportId);
         formData.append('status', newStatus);
+        if (customNotes) {
+            formData.append('verified_notes', customNotes);
+        }
+
+        if (window.CURRENT_AUTHORITY_USER) {
+            formData.append('verified_by_id', window.CURRENT_AUTHORITY_USER.id || '');
+            formData.append('verified_by_name', window.CURRENT_AUTHORITY_USER.name || '');
+        }
 
         const resp = await fetch('api/update_status.php', {
             method: 'POST',
@@ -364,11 +424,35 @@ async function updateReportStatus(reportId, newStatus) {
         const res = await resp.json();
         if (res.success) {
             const rep = allReports.find(x => x.id === reportId);
-            if (rep) rep.status = newStatus;
+            if (rep) {
+                rep.status = newStatus;
+                if (newStatus === 'verified') {
+                    rep.verified_by_id = (window.CURRENT_AUTHORITY_USER && window.CURRENT_AUTHORITY_USER.id) ? window.CURRENT_AUTHORITY_USER.id : 'auth_admin';
+                    rep.verified_by_name = (window.CURRENT_AUTHORITY_USER && window.CURRENT_AUTHORITY_USER.name) ? window.CURRENT_AUTHORITY_USER.name : 'Road Authority Engineer';
+                    rep.verified_at = new Date().toISOString().replace('T', ' ').substring(0, 19);
+                    if (customNotes) rep.verified_notes = customNotes;
+                }
+            }
+
+            // Also sync to Supabase Client directly for instant realtime broadcast
+            if (window.supabaseClient) {
+                let supaStatus = newStatus;
+                if (newStatus === 'reported') supaStatus = 'detected';
+                if (newStatus === 'under_repair' || newStatus === 'assigned') supaStatus = 'in_progress';
+                window.supabaseClient
+                    .from('damage_reports')
+                    .update({ status: supaStatus })
+                    .eq('id', reportId)
+                    .then(() => console.log('Supabase cloud status updated'));
+            }
+
             applyFilters();
-            showToast(`Status for ${reportId} updated to ${newStatus.replace('_', ' ')}`);
+            renderVerifiedPotholesTable();
+            showToast(currentAppLang === 'bn' 
+                ? `${reportId} এর স্ট্যাটাস '${newStatus}' এ সফলভাবে আপডেট হয়েছে` 
+                : `Status for ${reportId} updated to ${newStatus.replace('_', ' ')}`);
         } else {
-            alert('Error updating status: ' + res.error);
+            alert('Error updating status: ' + (res.error || 'Unknown error'));
         }
     } catch (e) {
         console.error('Update status error:', e);
@@ -1240,4 +1324,492 @@ function filterTableToUpazilla(upazillaName) {
     if (typeof showToast === 'function') {
         showToast(`Filtered database records to: ${upazillaName} Upazilla`);
     }
+}
+
+
+// ================= AUTHORITY CREW ASSIGNMENT WORKFLOW =================
+
+// Open Assign Crew Modal for a specific report in its Upazilla
+async function openAssignCrewModal(reportId) {
+    const rep = allReports.find(x => x.id === reportId);
+    if (!rep) return;
+
+    document.getElementById('assign-report-id').value = rep.id;
+    document.getElementById('assign-upazilla').value = rep.upazilla || '';
+    document.getElementById('assign-district').value = rep.district || '';
+
+    document.getElementById('assign-defect-id').textContent = rep.id;
+    document.getElementById('assign-defect-sev').textContent = rep.severity;
+    document.getElementById('assign-defect-sev').className = `px-2 py-0.5 rounded text-[10px] font-bold ${rep.severity === 'CRITICAL' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'}`;
+    
+    const upzText = typeof translateGeoName === 'function' ? translateGeoName(rep.upazilla || 'Khan Jahan Ali') : (rep.upazilla || 'Khan Jahan Ali');
+    const distText = typeof translateGeoName === 'function' ? translateGeoName(rep.district || 'Khulna') : (rep.district || 'Khulna');
+    document.getElementById('assign-defect-loc').textContent = `${upzText}, ${distText}`;
+    document.getElementById('assign-defect-road').textContent = rep.road_name || 'Survey Route Segment';
+    document.getElementById('assign-defect-img').src = rep.image_url || 'uploads/potholes/rpt-1792217799588.jpg';
+    document.getElementById('assign-target-upazilla').textContent = `${upzText}`;
+
+    // Default scheduled date tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    document.getElementById('assign-scheduled-date').value = rep.scheduled_repair_date || tomorrow.toISOString().split('T')[0];
+    document.getElementById('assign-notes').value = rep.repair_notes || '';
+
+    const listContainer = document.getElementById('assign-crews-list');
+    listContainer.innerHTML = `
+        <div class="py-6 text-center text-slate-400 text-xs">
+            <i data-lucide="loader" class="w-5 h-5 animate-spin inline mb-1 text-amber-600"></i>
+            <div>Loading registered construction crews in ${upzText}...</div>
+        </div>
+    `;
+    lucide.createIcons();
+
+    document.getElementById('assign-crew-modal').classList.remove('hidden');
+
+    // Fetch crews for this upazilla
+    try {
+        const resp = await fetch(`api/get_crews.php?upazilla=${encodeURIComponent(rep.upazilla || '')}`);
+        const data = await resp.json();
+        const crews = (data.success && data.crews && data.crews.length > 0) ? data.crews : [];
+
+        if (crews.length === 0) {
+            listContainer.innerHTML = `
+                <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                    <div class="font-bold mb-1">⚠️ No specific crew registered yet for ${upzText}</div>
+                    <div class="text-[11px] text-amber-700 mb-2">You can type a manual crew name or register a new crew for this Upazilla.</div>
+                    <input type="text" id="manual-crew-input" placeholder="e.g. Khulna Zone Rapid Patch Crew" 
+                           class="w-full bg-white border border-amber-300 rounded-lg p-2 text-xs font-semibold">
+                </div>
+            `;
+        } else {
+            listContainer.innerHTML = crews.map((c, idx) => {
+                const isSelected = idx === 0 || (rep.assigned_crew && rep.assigned_crew.includes(c.name));
+                const activeCount = parseInt(c.active_tasks_count || 0);
+
+                return `
+                    <label class="p-3 rounded-xl border border-slate-200 hover:border-amber-400 bg-white hover:bg-amber-50/20 transition flex items-center justify-between gap-3 cursor-pointer group has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50/40">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <input type="radio" name="selected_crew" value="${c.id}" data-name="${c.name} (${c.team_name || 'Repair Unit'})" ${isSelected ? 'checked' : ''} class="accent-amber-600">
+                            <div class="min-w-0">
+                                <div class="font-bold text-slate-900 text-xs truncate group-hover:text-amber-800">${c.name}</div>
+                                <div class="text-[11px] text-slate-500 truncate">${c.team_name || 'Highway Maintenance Unit'}</div>
+                                ${c.phone ? `<div class="text-[10px] text-slate-400 font-mono mt-0.5">📞 ${c.phone}</div>` : ''}
+                            </div>
+                        </div>
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${activeCount > 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'} shrink-0">
+                            ${formatNumber(activeCount)} active
+                        </span>
+                    </label>
+                `;
+            }).join('');
+        }
+        lucide.createIcons();
+    } catch (e) {
+        console.error('Error fetching crews:', e);
+    }
+}
+
+function closeAssignCrewModal() {
+    document.getElementById('assign-crew-modal').classList.add('hidden');
+    applyFilters();
+}
+
+// Submit Assign Crew
+async function submitAssignCrew(e) {
+    e.preventDefault();
+    const reportId = document.getElementById('assign-report-id').value;
+    const date = document.getElementById('assign-scheduled-date').value;
+    const notes = document.getElementById('assign-notes').value;
+
+    let crewName = '';
+    let crewId = '';
+
+    const selectedRadio = document.querySelector('input[name="selected_crew"]:checked');
+    if (selectedRadio) {
+        crewId = selectedRadio.value;
+        crewName = selectedRadio.getAttribute('data-name');
+    } else {
+        const manual = document.getElementById('manual-crew-input');
+        if (manual && manual.value.trim()) {
+            crewName = manual.value.trim();
+        }
+    }
+
+    if (!crewName) {
+        alert('Please select or specify a construction crew to assign.');
+        return;
+    }
+
+    const btn = document.getElementById('btn-confirm-assign');
+    btn.disabled = true;
+    btn.innerHTML = `<i data-lucide="loader" class="w-4 h-4 animate-spin"></i><span>Assigning...</span>`;
+    lucide.createIcons();
+
+    try {
+        const formData = new FormData();
+        formData.append('report_id', reportId);
+        formData.append('status', 'assigned');
+        formData.append('assigned_crew', crewName);
+        formData.append('assigned_crew_id', crewId);
+        formData.append('scheduled_repair_date', date);
+        formData.append('repair_notes', notes);
+
+        const resp = await fetch('api/update_status.php', { method: 'POST', body: formData });
+        const res = await resp.json();
+
+        if (res.success) {
+            const rep = allReports.find(x => x.id === reportId);
+            if (rep) {
+                rep.status = 'assigned';
+                rep.assigned_crew = crewName;
+                rep.assigned_crew_id = crewId;
+                rep.scheduled_repair_date = date;
+                rep.repair_notes = notes;
+            }
+            closeAssignCrewModal();
+            applyFilters();
+            showToast(`👷 Successfully assigned ${reportId} to ${crewName}`);
+        } else {
+            alert('Failed to assign crew: ' + res.error);
+        }
+    } catch (err) {
+        console.error('Assign error:', err);
+        alert('Server communication error.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i data-lucide="user-check" class="w-4 h-4"></i><span>Confirm Crew Assignment</span>`;
+        lucide.createIcons();
+    }
+}
+
+// Logout for Authority
+async function handleAuthorityLogout() {
+    if (!confirm(currentAppLang === 'bn' ? 'আপনি কি লগআউট করতে চান?' : 'Are you sure you want to log out?')) return;
+    try {
+        await fetch('api/auth.php?action=logout');
+        window.location.href = 'login.php';
+    } catch (e) {
+        window.location.href = 'login.php';
+    }
+}
+
+
+/* ==========================================================================
+   VERIFIED REPAIRED POTHOLES SEGMENT & REPAIRED PHOTO MODAL LOGIC
+   ========================================================================== */
+
+let currentVerifiedTab = 'me'; // 'me' | 'others'
+
+// Switch Tab between "Verified by Me" and "Verified by Others"
+function setVerifiedTab(tab) {
+    currentVerifiedTab = tab;
+    const btnMe = document.getElementById('btn-verified-me');
+    const btnOthers = document.getElementById('btn-verified-others');
+    if (tab === 'me') {
+        if (btnMe) btnMe.className = "px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer bg-white text-emerald-800 shadow-xs";
+        if (btnOthers) btnOthers.className = "px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer text-slate-600 hover:text-slate-900";
+    } else {
+        if (btnOthers) btnOthers.className = "px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer bg-white text-emerald-800 shadow-xs";
+        if (btnMe) btnMe.className = "px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-1.5 transition cursor-pointer text-slate-600 hover:text-slate-900";
+    }
+    renderVerifiedPotholesTable();
+}
+
+// Populate Upazilla Filter inside Verified Segment
+function populateVerifiedUpazillaFilter(reports) {
+    const sel = document.getElementById('verified-upazilla-filter');
+    if (!sel) return;
+    const currentVal = sel.value || 'all';
+
+    const upazillas = new Set();
+    (reports || []).forEach(r => {
+        if (r.upazilla) upazillas.add(r.upazilla);
+    });
+
+    const isBn = (typeof currentAppLang !== 'undefined' && currentAppLang === 'bn');
+    let html = `<option value="all">${isBn ? 'সমগ্র উপজেলা (All Upazillas)' : 'All Upazillas (সমগ্র উপজেলা)'}</option>`;
+    Array.from(upazillas).sort().forEach(u => {
+        const uText = typeof translateGeoName === 'function' ? translateGeoName(u) : u;
+        html += `<option value="${u}" ${u === currentVal ? 'selected' : ''}>${uText}</option>`;
+    });
+    sel.innerHTML = html;
+}
+
+// Render the Verified Repaired Potholes Table
+function renderVerifiedPotholesTable() {
+    const tbody = document.getElementById('verified-table-body');
+    if (!tbody) return;
+
+    const currentAuthId = (window.CURRENT_AUTHORITY_USER && window.CURRENT_AUTHORITY_USER.id) ? window.CURRENT_AUTHORITY_USER.id : 'auth_admin';
+    const currentAuthName = (window.CURRENT_AUTHORITY_USER && window.CURRENT_AUTHORITY_USER.name) ? window.CURRENT_AUTHORITY_USER.name.toLowerCase() : '';
+
+    // All verified reports
+    const verifiedAll = (allReports || []).filter(r => (r.status || '').toLowerCase() === 'verified');
+
+    // Categorize: Verified by Me vs Verified by Others
+    const myVerified = verifiedAll.filter(r => {
+        const vId = r.verified_by_id || '';
+        const vName = (r.verified_by_name || '').toLowerCase();
+        return (vId === currentAuthId) || (currentAuthName && vName.includes(currentAuthName));
+    });
+
+    const othersVerified = verifiedAll.filter(r => {
+        const vId = r.verified_by_id || '';
+        const vName = (r.verified_by_name || '').toLowerCase();
+        return !(vId === currentAuthId || (currentAuthName && vName.includes(currentAuthName)));
+    });
+
+    const elCountMe = document.getElementById('badge-count-verified-me');
+    const elCountOthers = document.getElementById('badge-count-verified-others');
+    if (elCountMe) elCountMe.textContent = formatNumber(myVerified.length);
+    if (elCountOthers) elCountOthers.textContent = formatNumber(othersVerified.length);
+
+    // Active tab list
+    let list = (currentVerifiedTab === 'me') ? myVerified : othersVerified;
+
+    // Upazilla filter
+    const upzSelect = document.getElementById('verified-upazilla-filter');
+    if (upzSelect && upzSelect.value !== 'all') {
+        list = list.filter(r => (r.upazilla || '').toLowerCase() === upzSelect.value.toLowerCase());
+    }
+
+    // Search filter
+    const searchEl = document.getElementById('verified-search-input');
+    if (searchEl && searchEl.value.trim()) {
+        const s = searchEl.value.trim().toLowerCase();
+        list = list.filter(r => 
+            (r.id || '').toLowerCase().includes(s) ||
+            (r.road_name || '').toLowerCase().includes(s) ||
+            (r.verified_by_name || '').toLowerCase().includes(s) ||
+            (r.assigned_crew || '').toLowerCase().includes(s) ||
+            (r.upazilla || '').toLowerCase().includes(s)
+        );
+    }
+
+    const summaryEl = document.getElementById('verified-records-summary');
+    if (summaryEl) {
+        summaryEl.textContent = (typeof currentAppLang !== 'undefined' && currentAppLang === 'bn')
+            ? `${formatNumber(list.length)} টি যাচাইকৃত রেকর্ড প্রদর্শিত হচ্ছে`
+            : `Showing ${list.length} verified records`;
+    }
+
+    if (list.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" class="text-center py-12 text-slate-400">
+                    <div class="flex flex-col items-center justify-center gap-2">
+                        <i data-lucide="shield-alert" class="w-8 h-8 text-slate-300"></i>
+                        <span>${(typeof currentAppLang !== 'undefined' && currentAppLang === 'bn') 
+                            ? (currentVerifiedTab === 'me' ? 'আপনার দ্বারা অনুমোদিত কোনো রেকর্ড এখনও পাওয়া যায়নি।' : 'অন্যান্য কর্তৃপক্ষের দ্বারা অনুমোদিত কোনো রেকর্ড পাওয়া যায়নি।')
+                            : (currentVerifiedTab === 'me' ? 'No records verified by you yet.' : 'No records verified by other authorities in this filter.')}</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+        if (window.lucide) lucide.createIcons();
+        return;
+    }
+
+    const isBn = (typeof currentAppLang !== 'undefined' && currentAppLang === 'bn');
+
+    tbody.innerHTML = list.map(r => {
+        const lat = parseFloat(r.latitude).toFixed(5);
+        const lng = parseFloat(r.longitude).toFixed(5);
+        const upzText = typeof translateGeoName === 'function' ? translateGeoName(r.upazilla || 'Khan Jahan Ali') : (r.upazilla || 'Khan Jahan Ali');
+        const distText = typeof translateGeoName === 'function' ? translateGeoName(r.district || 'Khulna') : (r.district || 'Khulna');
+
+        return `
+            <tr class="hover:bg-slate-50 transition border-b border-slate-100 group">
+                <!-- Repaired Proof Photo -->
+                <td class="py-3 px-4">
+                    <div class="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 relative border-2 border-emerald-500 shadow-2xs cursor-pointer group-hover:scale-105 transition" onclick="openRepairedPhotoInspectionModal('${r.id}')">
+                        <img src="${r.repair_image_url || r.image_url || 'uploads/potholes/rpt-1792217799588.jpg'}" 
+                             alt="${r.id} Repair" class="w-full h-full object-cover">
+                        <span class="absolute bottom-0 right-0 bg-emerald-600 text-[8px] font-bold text-white px-1 rounded-tl">
+                            ${isBn ? 'মেরামত' : 'Repaired'}
+                        </span>
+                    </div>
+                </td>
+
+                <!-- Original Defect (Before Repair) -->
+                <td class="py-3 px-4">
+                    <div class="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 relative border border-slate-200 cursor-pointer group-hover:scale-105 transition" onclick="openInspectionModal('${r.id}')">
+                        <img src="${r.image_url || 'uploads/potholes/rpt-1792217799588.jpg'}" 
+                             alt="${r.id} Original" class="w-full h-full object-cover">
+                        <span class="absolute bottom-0 right-0 bg-slate-900/80 text-[8px] font-mono text-white px-1 rounded-tl">
+                            ${isBn ? 'পূর্বাবস্থা' : 'Before'}
+                        </span>
+                    </div>
+                </td>
+
+                <!-- ID & Road -->
+                <td class="py-3 px-4">
+                    <div class="font-bold text-slate-900 text-xs hover:text-emerald-700 cursor-pointer flex items-center gap-1.5" onclick="openRepairedPhotoInspectionModal('${r.id}')">
+                        <span class="font-mono">${r.id}</span>
+                        <span class="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            ${isBn ? 'যাচাইকৃত' : 'VERIFIED'}
+                        </span>
+                    </div>
+                    <div class="text-xs font-semibold text-slate-700 truncate max-w-[210px] mt-0.5" title="${r.road_name || ''}">
+                        ${r.road_name || 'Highway Route Segment'}
+                    </div>
+                    <div class="text-[11px] text-slate-400 font-mono mt-0.5">
+                        ${lat}, ${lng}
+                    </div>
+                </td>
+
+                <!-- Location -->
+                <td class="py-3 px-4">
+                    <div class="text-xs font-bold text-slate-800">${upzText}</div>
+                    <div class="text-[11px] text-slate-500">${distText}</div>
+                </td>
+
+                <!-- Repaired By Crew -->
+                <td class="py-3 px-4">
+                    <div class="text-xs font-bold text-slate-800 flex items-center gap-1">
+                        <i data-lucide="wrench" class="w-3.5 h-3.5 text-amber-600"></i>
+                        <span>${r.assigned_crew ? r.assigned_crew.split('(')[0].trim() : (isBn ? 'মেরামত সম্পন্ন' : 'Repair Unit')}</span>
+                    </div>
+                    <div class="text-[10px] text-slate-400 mt-0.5">
+                        ${r.repair_completed_at ? formatAppDate(r.repair_completed_at) : (r.updated_at ? formatAppDate(r.updated_at) : '')}
+                    </div>
+                </td>
+
+                <!-- Verified by Authority -->
+                <td class="py-3 px-4">
+                    <div class="text-xs font-black text-emerald-800 flex items-center gap-1">
+                        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-600"></i>
+                        <span>${r.verified_by_name || 'Road Authority'}</span>
+                    </div>
+                    <div class="text-[10px] text-emerald-600 mt-0.5 font-medium">
+                        ${r.verified_at ? formatAppDate(r.verified_at) : (isBn ? 'যাচাইকৃত' : 'Certified')}
+                    </div>
+                </td>
+
+                <!-- Map Action -->
+                <td class="py-3 px-4 text-right">
+                    <div class="flex items-center justify-end gap-1.5">
+                        <button onclick="flyToReport('${r.id}')" title="${isBn ? 'ম্যাপে সরাসরি দেখুন' : 'Locate on Live GIS Map'}" 
+                                class="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 transition cursor-pointer shadow-2xs">
+                            <i data-lucide="map" class="w-3.5 h-3.5"></i>
+                        </button>
+                        <button onclick="openRepairedPhotoInspectionModal('${r.id}')" title="${isBn ? 'যাচাইয়ের সনদ ও বিবরণ দেখুন' : 'View Verification Details'}" 
+                                class="px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold flex items-center gap-1 transition cursor-pointer shadow-2xs">
+                            <i data-lucide="eye" class="w-3.5 h-3.5 text-slate-500"></i>
+                            <span class="hidden sm:inline">${isBn ? 'বিবরণ' : 'Details'}</span>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+
+    if (window.lucide) lucide.createIcons();
+}
+
+// Open Repaired Photo Inspection Modal
+function openRepairedPhotoInspectionModal(reportId) {
+    const report = (allReports || []).find(r => r.id === reportId);
+    if (!report) return;
+
+    const repIdEl = document.getElementById('rpm-report-id');
+    if (repIdEl) repIdEl.value = report.id;
+
+    const titleEl = document.getElementById('rpm-title');
+    if (titleEl) {
+        titleEl.textContent = (typeof currentAppLang !== 'undefined' && currentAppLang === 'bn')
+            ? `${report.id} - মেরামত সমাপ্তির প্রমাণ ও প্রকৌশল যাচাই`
+            : `${report.id} - Repair Completion Proof & Engineering Verification`;
+    }
+
+    const imgBefore = document.getElementById('rpm-img-before');
+    if (imgBefore) imgBefore.src = report.image_url || 'uploads/potholes/rpt-1792217799588.jpg';
+
+    const dateBefore = document.getElementById('rpm-before-date');
+    if (dateBefore) dateBefore.textContent = report.reported_at ? formatAppDate(report.reported_at) : '--';
+
+    const imgAfter = document.getElementById('rpm-img-after');
+    if (imgAfter) imgAfter.src = report.repair_image_url || report.image_url || 'uploads/potholes/rpt-1792217799588.jpg';
+
+    const dateAfter = document.getElementById('rpm-after-date');
+    if (dateAfter) {
+        dateAfter.textContent = report.repair_completed_at ? formatAppDate(report.repair_completed_at) : (currentAppLang === 'bn' ? 'মেরামত সম্পন্ন' : 'Repaired on Site');
+    }
+
+    const idRoadEl = document.getElementById('rpm-id-road');
+    if (idRoadEl) idRoadEl.textContent = `${report.id} - ${report.road_name || 'Highway Route'}`;
+
+    const coordsEl = document.getElementById('rpm-coords');
+    if (coordsEl && report.latitude && report.longitude) {
+        coordsEl.textContent = `${parseFloat(report.latitude).toFixed(5)}, ${parseFloat(report.longitude).toFixed(5)}`;
+    }
+
+    const crewEl = document.getElementById('rpm-crew');
+    if (crewEl) crewEl.textContent = report.assigned_crew || (currentAppLang === 'bn' ? 'অর্পণ করা হয়নি' : 'Unassigned Crew');
+
+    const repairDateEl = document.getElementById('rpm-repair-date');
+    if (repairDateEl) repairDateEl.textContent = report.repair_completed_at || report.updated_at || '--';
+
+    const locEl = document.getElementById('rpm-location');
+    if (locEl) {
+        const upz = typeof translateGeoName === 'function' ? translateGeoName(report.upazilla || 'Khan Jahan Ali') : (report.upazilla || 'Khan Jahan Ali');
+        const dist = typeof translateGeoName === 'function' ? translateGeoName(report.district || 'Khulna') : (report.district || 'Khulna');
+        locEl.textContent = `${upz}, ${dist}`;
+    }
+
+    const sevEl = document.getElementById('rpm-severity');
+    if (sevEl) sevEl.textContent = report.severity || 'HIGH';
+
+    const notesEl = document.getElementById('rpm-verify-notes');
+    if (notesEl) notesEl.value = report.verified_notes || '';
+
+    // If already verified, change button text to indicate certified
+    const btnVerify = document.getElementById('rpm-btn-verify');
+    const isAlreadyVerified = (report.status || '').toLowerCase() === 'verified';
+    if (btnVerify) {
+        if (isAlreadyVerified) {
+            btnVerify.innerHTML = `<i data-lucide="check" class="w-4 h-4"></i> <span>${currentAppLang === 'bn' ? 'ইতিমধ্যে অনুমোদিত' : 'Already Verified'}</span>`;
+            btnVerify.disabled = true;
+            btnVerify.className = "px-5 py-2 rounded-xl text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 cursor-not-allowed";
+        } else {
+            btnVerify.innerHTML = `<i data-lucide="shield-check" class="w-4 h-4"></i> <span id="rpm-btn-verify-text">${currentAppLang === 'bn' ? 'অনুমোদন ও চূড়ান্ত যাচাই করুন' : 'Approve & Mark as Verified'}</span>`;
+            btnVerify.disabled = false;
+            btnVerify.className = "px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-md flex items-center gap-1.5 cursor-pointer";
+        }
+    }
+
+    const modal = document.getElementById('repaired-photo-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+        if (window.lucide) lucide.createIcons();
+    }
+}
+
+function closeRepairedPhotoModal() {
+    const modal = document.getElementById('repaired-photo-modal');
+    if (modal) {
+        modal.classList.remove('flex');
+        modal.classList.add('hidden');
+    }
+}
+
+function flyToReportFromModal() {
+    const repIdEl = document.getElementById('rpm-report-id');
+    const reportId = repIdEl ? repIdEl.value : '';
+    closeRepairedPhotoModal();
+    if (reportId && typeof flyToReport === 'function') {
+        flyToReport(reportId);
+    }
+}
+
+async function confirmFinalVerification() {
+    const repIdEl = document.getElementById('rpm-report-id');
+    const reportId = repIdEl ? repIdEl.value : '';
+    if (!reportId) return;
+
+    const notesEl = document.getElementById('rpm-verify-notes');
+    const notes = notesEl ? notesEl.value.trim() : '';
+    closeRepairedPhotoModal();
+    await updateReportStatus(reportId, 'verified', notes);
 }
