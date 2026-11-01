@@ -81,11 +81,11 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
 
             <!-- Language Selector Segment -->
             <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 select-none shadow-2xs">
-                <button type="button" id="lang-btn-bn" onclick="setAppLanguage('bn')" 
+                <button type="button" id="lang-btn-bn" onclick="setAppLanguage('bn')"
                         class="px-3.5 py-1.5 rounded-lg transition-all font-bold text-xs sm:text-sm text-slate-600 hover:text-slate-900 cursor-pointer">
                     <span>বাংলা</span>
                 </button>
-                <button type="button" id="lang-btn-en" onclick="setAppLanguage('en')" 
+                <button type="button" id="lang-btn-en" onclick="setAppLanguage('en')"
                         class="px-3.5 py-1.5 rounded-lg transition-all font-bold text-xs sm:text-sm text-slate-600 hover:text-slate-900 cursor-pointer">
                     <span>English</span>
                 </button>
@@ -96,7 +96,7 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
     <!-- Main Content Area: Centered Card (Whitish Aesthetic, Comfortable Sizing) -->
     <main class="flex-1 flex items-center justify-center p-4 sm:p-6 my-auto">
         <div class="w-full max-w-xl bg-white border border-slate-200/90 rounded-2xl shadow-xl shadow-slate-200/60 p-6 sm:p-8">
-            
+
             <!-- Dynamic Alert / Notification Banner -->
             <div id="auth-alert" class="hidden mb-4 p-3 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2.5 border"></div>
 
@@ -113,12 +113,12 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                     </div>
                 </div>
 
-                <form id="form-signup" onsubmit="handleSignUp(event)" class="space-y-3.5">
-                    
+                <form id="form-signup" onsubmit="handleSignUp(event)" class="space-y-3.5" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+
                     <!-- Role Radio Selector (Comfortably Sized) -->
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5" id="lbl-role-select">
-                            Select Account Role / ভূমিকা নির্বাচন করুন
+                            Select Account Role
                         </label>
                         <div class="grid grid-cols-2 gap-3">
                             <label class="p-3 rounded-xl border border-amber-300 bg-amber-50/60 flex items-center gap-2.5 cursor-pointer transition hover:bg-amber-50 has-[:checked]:border-amber-500 has-[:checked]:bg-amber-100/70 shadow-2xs">
@@ -126,9 +126,9 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                                 <div class="min-w-0">
                                     <div class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-1.5 truncate">
                                         <i data-lucide="hard-hat" class="w-4 h-4 text-amber-600 shrink-0"></i>
-                                        <span>Crew Member</span>
+                                        <span id="lbl-role-crew-title">Crew Member</span>
                                     </div>
-                                    <div class="text-[11px] text-slate-500 truncate">Road Repair Field Team</div>
+                                    <div class="text-[11px] text-slate-500 truncate" id="lbl-role-crew-desc">Road Repair Field Team</div>
                                 </div>
                             </label>
 
@@ -137,9 +137,9 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                                 <div class="min-w-0">
                                     <div class="text-xs sm:text-sm font-bold text-slate-900 flex items-center gap-1.5 truncate">
                                         <i data-lucide="shield-check" class="w-4 h-4 text-sky-600 shrink-0"></i>
-                                        <span>Authority</span>
+                                        <span id="lbl-role-auth-title">Authority</span>
                                     </div>
-                                    <div class="text-[11px] text-slate-500 truncate">Road & Highway Dept</div>
+                                    <div class="text-[11px] text-slate-500 truncate" id="lbl-role-auth-desc">Road & Highway Dept</div>
                                 </div>
                             </label>
                         </div>
@@ -149,12 +149,14 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-bold uppercase text-slate-600 mb-1" id="lbl-reg-name">Full Name</label>
-                            <input type="text" id="signup-name" required placeholder="e.g. Engr. Asaduzzaman"
+                            <input type="text" id="signup-name" name="new_full_name" required placeholder="e.g. Engr. Asaduzzaman"
+                                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other"
                                    class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-emerald-500 transition">
                         </div>
                         <div>
                             <label class="block text-xs font-bold uppercase text-slate-600 mb-1" id="lbl-reg-phone">Phone Number</label>
-                            <input type="text" id="signup-phone" placeholder="+880 1712-345678"
+                            <input type="text" id="signup-phone" name="new_phone_num" placeholder="+880 1712-345678"
+                                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other"
                                    class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-emerald-500 transition">
                         </div>
                     </div>
@@ -163,12 +165,14 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-bold uppercase text-slate-600 mb-1" id="lbl-reg-email">Email Address</label>
-                            <input type="email" id="signup-email" required placeholder="name@amarpath.gov.bd"
+                            <input type="email" id="signup-email" name="new_email_addr" required placeholder="name@amarpath.gov.bd"
+                                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other"
                                    class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-emerald-500 transition">
                         </div>
                         <div>
                             <label class="block text-xs font-bold uppercase text-slate-600 mb-1" id="lbl-reg-team">Team / Unit Name</label>
-                            <input type="text" id="signup-team" placeholder="e.g. Quick Patch Unit 1"
+                            <input type="text" id="signup-team" name="new_team_title" placeholder="e.g. Quick Patch Unit 1"
+                                   autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other"
                                    class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-emerald-500 transition">
                         </div>
                     </div>
@@ -177,16 +181,13 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                     <div id="crew-geo-section" class="p-3 rounded-xl bg-amber-50/50 border border-amber-200/80 space-y-2">
                         <div class="text-xs font-bold text-amber-900 flex items-center gap-1.5" id="lbl-geo-jurisdiction">
                             <i data-lucide="map-pin" class="w-3.5 h-3.5 text-amber-600"></i>
-                            <span>Assigned Jurisdiction (আপনার নির্ধারিত উপজেলা)</span>
+                            <span>Assigned Jurisdiction (Upazilla)</span>
                         </div>
 
                         <div class="grid grid-cols-3 gap-2">
                             <div>
                                 <select id="signup-division" onchange="onSignUpDivisionChange()" class="w-full bg-white border border-slate-300 rounded-lg px-2 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-amber-500">
                                     <option value="">Division</option>
-                                    <?php foreach (array_keys($geoHierarchy) as $div): ?>
-                                        <option value="<?= htmlspecialchars($div) ?>"><?= htmlspecialchars($div) ?></option>
-                                    <?php endforeach; ?>
                                 </select>
                             </div>
                             <div>
@@ -202,17 +203,33 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                         </div>
                     </div>
 
-                    <!-- Password & Confirm Password -->
+                    <!-- Password & Confirm Password with Visibility Toggle -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-bold uppercase text-slate-600 mb-1" id="lbl-reg-pwd">Password</label>
-                            <input type="password" id="signup-password" required placeholder="Min 6 characters"
-                                   class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-emerald-500 transition">
+                            <div class="relative">
+                                <input type="password" id="signup-password" name="new_sec_pwd" required placeholder="Min 6 characters"
+                                       autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true"
+                                       class="w-full bg-slate-50 border border-slate-300 rounded-xl pl-3.5 pr-10 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-emerald-500 transition">
+                                <button type="button" onclick="togglePasswordVisibility('signup-password', this)"
+                                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1 rounded cursor-pointer transition"
+                                        aria-label="Toggle password visibility">
+                                    <i data-lucide="eye" class="w-4 h-4"></i>
+                                </button>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-xs font-bold uppercase text-slate-600 mb-1" id="lbl-reg-cpwd">Confirm Password</label>
-                            <input type="password" id="signup-cpassword" required placeholder="Repeat password"
-                                   class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-emerald-500 transition">
+                            <div class="relative">
+                                <input type="password" id="signup-cpassword" name="new_sec_cpwd" required placeholder="Repeat password"
+                                       autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true"
+                                       class="w-full bg-slate-50 border border-slate-300 rounded-xl pl-3.5 pr-10 py-2 text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-emerald-500 transition">
+                                <button type="button" onclick="togglePasswordVisibility('signup-cpassword', this)"
+                                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1 rounded cursor-pointer transition"
+                                        aria-label="Toggle password visibility">
+                                    <i data-lucide="eye" class="w-4 h-4"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -226,7 +243,7 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                     <!-- Already Signed Up Callout -->
                     <div class="text-center pt-3 border-t border-slate-100 text-xs sm:text-sm text-slate-600">
                         <span id="txt-already-account">Already Signed Up?</span>
-                        <button type="button" onclick="showSignInView()" 
+                        <button type="button" onclick="showSignInView()"
                                 class="font-extrabold text-sky-700 hover:text-sky-900 underline ml-1 cursor-pointer" id="lnk-switch-signin">
                             Sign In here &rarr;
                         </button>
@@ -265,9 +282,14 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                             Password
                         </label>
                         <div class="relative">
-                            <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
+                            <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
                             <input type="password" id="signin-password" required placeholder="••••••••"
-                                   class="w-full bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-sky-500 transition">
+                                   class="w-full bg-slate-50 border border-slate-300 rounded-xl pl-10 pr-10 py-2.5 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-sky-500 transition">
+                            <button type="button" onclick="togglePasswordVisibility('signin-password', this)"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none p-1 rounded cursor-pointer transition"
+                                    aria-label="Toggle password visibility">
+                                <i data-lucide="eye" class="w-4 h-4"></i>
+                            </button>
                         </div>
                     </div>
 
@@ -280,7 +302,7 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                     <!-- Need an Account Callout -->
                     <div class="text-center pt-3 border-t border-slate-100 text-xs sm:text-sm text-slate-600">
                         <span id="txt-no-account">Don't have an account yet?</span>
-                        <button type="button" onclick="showSignUpView()" 
+                        <button type="button" onclick="showSignUpView()"
                                 class="font-extrabold text-emerald-700 hover:text-emerald-900 underline ml-1 cursor-pointer" id="lnk-switch-signup">
                             Sign Up first &rarr;
                         </button>
@@ -290,7 +312,7 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                     <div class="pt-3 border-t border-slate-100">
                         <p class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5" id="txt-quick-demo">
                             <i data-lucide="zap" class="w-3.5 h-3.5 text-amber-500"></i>
-                            <span>One-Click Demo Access / দ্রুত ডেমো প্রবেশ</span>
+                            <span>One-Click Demo Access</span>
                         </p>
 
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
@@ -301,7 +323,7 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                                     <i data-lucide="shield-check" class="w-4 h-4"></i>
                                 </span>
                                 <div class="min-w-0">
-                                    <div class="text-xs font-bold text-slate-900 truncate">Road Authority</div>
+                                    <div class="text-xs font-bold text-slate-900 truncate" id="lbl-demo-auth-role">Road Authority</div>
                                     <div class="text-[11px] text-slate-500 truncate">Munem Shahriar</div>
                                 </div>
                             </button>
@@ -313,7 +335,7 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                                     <i data-lucide="hard-hat" class="w-4 h-4"></i>
                                 </span>
                                 <div class="min-w-0">
-                                    <div class="text-xs font-bold text-slate-900 truncate">Crew (Khulna)</div>
+                                    <div class="text-xs font-bold text-slate-900 truncate" id="lbl-demo-crew-role">Crew (Khulna)</div>
                                     <div class="text-[11px] text-slate-500 truncate">Khan Jahan Ali</div>
                                 </div>
                             </button>
@@ -337,11 +359,39 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
 
     <!-- Authentication Client Script -->
     <script>
+        // Password Visibility Toggle Helper (Show / Hide Password)
+        function togglePasswordVisibility(fieldId, btn) {
+            const field = document.getElementById(fieldId);
+            if (!field) return;
+            const isPassword = field.type === 'password';
+            field.type = isPassword ? 'text' : 'password';
+            btn.innerHTML = `<i data-lucide="${isPassword ? 'eye-off' : 'eye'}" class="w-4 h-4"></i>`;
+            btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+            lucide.createIcons();
+        }
+
+        // Clear all signup form fields to avoid autofill/cached suggestions
+        function clearSignupForm() {
+            const form = document.getElementById('form-signup');
+            if (form) form.reset();
+            const fieldIds = ['signup-name', 'signup-phone', 'signup-email', 'signup-team', 'signup-password', 'signup-cpassword'];
+            fieldIds.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.value = '';
+                    el.setAttribute('autocomplete', id.includes('password') ? 'new-password' : 'off');
+                }
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
             applyLoginLanguage(currentAppLang);
+            clearSignupForm();
             // Default to Sign Up view as requested
             showSignUpView();
+            setTimeout(clearSignupForm, 100);
+            setTimeout(clearSignupForm, 400);
         });
 
         // Switch to Sign Up View
@@ -349,6 +399,7 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
             document.getElementById('view-signup').classList.remove('hidden');
             document.getElementById('view-signin').classList.add('hidden');
             document.getElementById('auth-alert').classList.add('hidden');
+            clearSignupForm();
             lucide.createIcons();
         }
 
@@ -375,7 +426,7 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
         function showAlert(msg, type = 'error') {
             const box = document.getElementById('auth-alert');
             box.classList.remove('hidden', 'bg-rose-50', 'border-rose-200', 'text-rose-800', 'bg-emerald-50', 'border-emerald-200', 'text-emerald-800', 'bg-sky-50', 'border-sky-200', 'text-sky-800');
-            
+
             if (type === 'error') {
                 box.classList.add('bg-rose-50', 'border-rose-200', 'text-rose-800');
                 box.innerHTML = `<i data-lucide="alert-circle" class="w-4 h-4 text-rose-600 shrink-0"></i><span>${msg}</span>`;
@@ -397,20 +448,44 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
             }
         }
 
+        // Populate Division Dropdown dynamically with bilingual labels
+        function populateSignupDivisions(lang) {
+            const isBn = lang === 'bn';
+            const divSelect = document.getElementById('signup-division');
+            if (!divSelect) return;
+            const curVal = divSelect.value;
+            divSelect.innerHTML = `<option value="">${isBn ? 'বিভাগ নির্বাচন করুন' : 'Division'}</option>`;
+            if (typeof GEO_HIERARCHY !== 'undefined') {
+                Object.keys(GEO_HIERARCHY).forEach(div => {
+                    const opt = document.createElement('option');
+                    opt.value = div;
+                    opt.textContent = (isBn && typeof translateGeoName === 'function') ? translateGeoName(div) : div;
+                    if (div === curVal) opt.selected = true;
+                    divSelect.appendChild(opt);
+                });
+            }
+        }
+
         // Cascading Division -> District
         function onSignUpDivisionChange() {
-            const div = document.getElementById('signup-division').value;
+            const isBn = currentAppLang === 'bn';
+            const divSelect = document.getElementById('signup-division');
             const distSelect = document.getElementById('signup-district');
             const upzSelect = document.getElementById('signup-upazilla');
+            if (!divSelect || !distSelect || !upzSelect) return;
 
-            distSelect.innerHTML = `<option value="">District</option>`;
-            upzSelect.innerHTML = `<option value="">Upazilla</option>`;
+            const div = divSelect.value;
+            const curDist = distSelect.value;
 
-            if (div && GEO_HIERARCHY[div]) {
+            distSelect.innerHTML = `<option value="">${isBn ? 'জেলা নির্বাচন করুন' : 'District'}</option>`;
+            upzSelect.innerHTML = `<option value="">${isBn ? 'উপজেলা নির্বাচন করুন' : 'Upazilla'}</option>`;
+
+            if (div && typeof GEO_HIERARCHY !== 'undefined' && GEO_HIERARCHY[div]) {
                 Object.keys(GEO_HIERARCHY[div]).forEach(dist => {
                     const opt = document.createElement('option');
                     opt.value = dist;
-                    opt.textContent = (typeof translateGeoName === 'function' && currentAppLang === 'bn') ? translateGeoName(dist) : dist;
+                    opt.textContent = (isBn && typeof translateGeoName === 'function') ? translateGeoName(dist) : dist;
+                    if (dist === curDist) opt.selected = true;
                     distSelect.appendChild(opt);
                 });
             }
@@ -418,17 +493,24 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
 
         // Cascading District -> Upazilla
         function onSignUpDistrictChange() {
-            const div = document.getElementById('signup-division').value;
-            const dist = document.getElementById('signup-district').value;
+            const isBn = currentAppLang === 'bn';
+            const divSelect = document.getElementById('signup-division');
+            const distSelect = document.getElementById('signup-district');
             const upzSelect = document.getElementById('signup-upazilla');
+            if (!divSelect || !distSelect || !upzSelect) return;
 
-            upzSelect.innerHTML = `<option value="">Upazilla</option>`;
+            const div = divSelect.value;
+            const dist = distSelect.value;
+            const curUpz = upzSelect.value;
 
-            if (div && dist && GEO_HIERARCHY[div] && GEO_HIERARCHY[div][dist]) {
+            upzSelect.innerHTML = `<option value="">${isBn ? 'উপজেলা নির্বাচন করুন' : 'Upazilla'}</option>`;
+
+            if (div && dist && typeof GEO_HIERARCHY !== 'undefined' && GEO_HIERARCHY[div] && GEO_HIERARCHY[div][dist]) {
                 GEO_HIERARCHY[div][dist].forEach(upz => {
                     const opt = document.createElement('option');
                     opt.value = upz;
-                    opt.textContent = (typeof translateGeoName === 'function' && currentAppLang === 'bn') ? translateGeoName(upz) : upz;
+                    opt.textContent = (isBn && typeof translateGeoName === 'function') ? translateGeoName(upz) : upz;
+                    if (upz === curUpz) opt.selected = true;
                     upzSelect.appendChild(opt);
                 });
             }
@@ -553,52 +635,25 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
                 formData.append('email', email);
                 formData.append('password', password);
 
-                // 1. Direct Supabase Client Auth Signup
-                if (window.supabase) {
-                    try {
-                        const supaClient = window.supabase.createClient(
-                            'https://dytilqslhxmlhrwselam.supabase.co',
-                            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5dGlscXNsaHhtbGhyd3NlbGFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5NDE5MDIsImV4cCI6MjEwODUxNzkwMn0.NHMeba85rqFXLO7UAnLqAT_j9J50Y-mwqRVpiVV59Uk'
-                        );
-                        await supaClient.auth.signUp({
-                            email: email,
-                            password: password,
-                            options: {
-                                data: {
-                                    full_name: name,
-                                    role: role,
-                                    phone: phone,
-                                    team_name: team,
-                                    division: division,
-                                    district: district,
-                                    upazilla: upazilla
-                                }
-                            }
-                        });
-                    } catch (supaErr) {
-                        console.warn('Supabase client registration note:', supaErr);
-                    }
-                }
-
-                // 2. Local Database & Server Sync
+                // Local Database & Server Sync
                 const res = await fetch('api/auth.php', { method: 'POST', body: formData });
                 const data = await res.json();
 
                 if (data.success) {
-                    showAlert(`Welcome back, ${data.user.name}! Redirecting...`, 'success');
+                    showAlert(currentAppLang === 'bn' ? `স্বাগতম, ${data.user.name}! প্রবেশ করা হচ্ছে...` : `Welcome back, ${data.user.name}! Redirecting...`, 'success');
                     setTimeout(() => {
                         window.location.href = data.redirect;
                     }, 500);
                 } else {
-                    showAlert(data.error || 'Invalid login credentials.', 'error');
+                    showAlert(data.error || (currentAppLang === 'bn' ? 'ভুল লগইন তথ্য।' : 'Invalid login credentials.'), 'error');
                     btn.disabled = false;
-                    btn.innerHTML = `<i data-lucide="arrow-right-circle" class="w-4 h-4"></i><span>Sign In to Dashboard</span>`;
+                    btn.innerHTML = `<i data-lucide="arrow-right-circle" class="w-4 h-4"></i><span>${currentAppLang === 'bn' ? 'ড্যাশবোর্ডে প্রবেশ করুন' : 'Sign In to Dashboard'}</span>`;
                     lucide.createIcons();
                 }
             } catch (err) {
-                showAlert('Network or server error during sign in.', 'error');
+                showAlert(currentAppLang === 'bn' ? 'সার্ভারে সংযোগ ত্রুটি।' : 'Network or server error during sign in.', 'error');
                 btn.disabled = false;
-                btn.innerHTML = `<i data-lucide="arrow-right-circle" class="w-4 h-4"></i><span>Sign In to Dashboard</span>`;
+                btn.innerHTML = `<i data-lucide="arrow-right-circle" class="w-4 h-4"></i><span>${currentAppLang === 'bn' ? 'ড্যাশবোর্ডে প্রবেশ করুন' : 'Sign In to Dashboard'}</span>`;
                 lucide.createIcons();
             }
         }
@@ -607,10 +662,22 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
         function applyLoginLanguage(lang) {
             const isBn = lang === 'bn';
 
+            // Sign Up View Headings
             document.getElementById('card-heading-signup').textContent = isBn ? 'নতুন অ্যাকাউন্ট তৈরি করুন' : 'Register New Account';
             document.getElementById('card-subheading-signup').textContent = isBn ? 'প্রথমে সাইন আপ সম্পন্ন করুন, এরপর সাইন ইন করে ড্যাশবোর্ডে প্রবেশ করুন' : 'Sign up first to create your credentials, then sign in to enter dashboard';
 
+            // Role Selector Headings and Descriptions
             document.getElementById('lbl-role-select').textContent = isBn ? 'অ্যাকাউন্টের ভূমিকা নির্বাচন করুন' : 'Select Account Role';
+            const crewTitle = document.getElementById('lbl-role-crew-title');
+            if (crewTitle) crewTitle.textContent = isBn ? 'নির্মাণ ও মেরামত কর্মী' : 'Crew Member';
+            const crewDesc = document.getElementById('lbl-role-crew-desc');
+            if (crewDesc) crewDesc.textContent = isBn ? 'সড়ক মেরামত ফিল্ড টিম' : 'Road Repair Field Team';
+            const authTitle = document.getElementById('lbl-role-auth-title');
+            if (authTitle) authTitle.textContent = isBn ? 'সড়ক কর্তৃপক্ষ' : 'Authority';
+            const authDesc = document.getElementById('lbl-role-auth-desc');
+            if (authDesc) authDesc.textContent = isBn ? 'সড়ক ও জনপথ বিভাগ' : 'Road & Highway Dept';
+
+            // Signup Field Labels
             document.getElementById('lbl-reg-name').textContent = isBn ? 'পূর্ণ নাম' : 'Full Name';
             document.getElementById('lbl-reg-phone').textContent = isBn ? 'মোবাইল নম্বর' : 'Phone Number';
             document.getElementById('lbl-reg-email').textContent = isBn ? 'ইমেইল ঠিকানা' : 'Email Address';
@@ -619,10 +686,39 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
             document.getElementById('lbl-reg-pwd').textContent = isBn ? 'পাসওয়ার্ড' : 'Password';
             document.getElementById('lbl-reg-cpwd').textContent = isBn ? 'পাসওয়ার্ড নিশ্চিত করুন' : 'Confirm Password';
             document.getElementById('txt-submit-signup').textContent = isBn ? 'রেজিস্ট্রেশন সম্পন্ন করে সাইন ইন করুন' : 'Register Account & Proceed to Sign In';
-            
+
+            // Input Placeholders (Zero Language Mismatch!)
+            const nameInput = document.getElementById('signup-name');
+            if (nameInput) nameInput.placeholder = isBn ? 'যেমনঃ মোঃ আসাদুজ্জামান' : 'e.g. Engr. Asaduzzaman';
+            const phoneInput = document.getElementById('signup-phone');
+            if (phoneInput) phoneInput.placeholder = isBn ? '০১৭১২-৩৪৫৬৭৮' : '+880 1712-345678';
+            const emailInput = document.getElementById('signup-email');
+            if (emailInput) emailInput.placeholder = isBn ? 'name@amarpath.gov.bd' : 'name@amarpath.gov.bd';
+            const teamInput = document.getElementById('signup-team');
+            if (teamInput) teamInput.placeholder = isBn ? 'যেমনঃ কুইক প্যাচ টিম ১' : 'e.g. Quick Patch Unit 1';
+            const pwdInput = document.getElementById('signup-password');
+            if (pwdInput) pwdInput.placeholder = isBn ? 'কমপক্ষে ৬ অক্ষর' : 'Min 6 characters';
+            const cpwdInput = document.getElementById('signup-cpassword');
+            if (cpwdInput) cpwdInput.placeholder = isBn ? 'পাসওয়ার্ড পুনরায় লিখুন' : 'Repeat password';
+
+            // Dynamic Localized Geo Dropdowns
+            const curDist = document.getElementById('signup-district').value;
+            const curUpz = document.getElementById('signup-upazilla').value;
+            populateSignupDivisions(lang);
+            onSignUpDivisionChange();
+            if (curDist) {
+                document.getElementById('signup-district').value = curDist;
+                onSignUpDistrictChange();
+                if (curUpz) {
+                    document.getElementById('signup-upazilla').value = curUpz;
+                }
+            }
+
+            // Already Signed Up switch
             document.getElementById('txt-already-account').textContent = isBn ? 'ইতিমধ্যে সাইন আপ করেছেন?' : 'Already Signed Up?';
             document.getElementById('lnk-switch-signin').textContent = isBn ? 'এখানে সাইন ইন করুন →' : 'Sign In here →';
 
+            // Sign In View Headings & Labels
             document.getElementById('card-heading-signin').textContent = isBn ? 'ড্যাশবোর্ডে সাইন ইন করুন' : 'Sign In to Dashboard';
             document.getElementById('card-subheading-signin').textContent = isBn ? 'আপনার ইমেইল ও পাসওয়ার্ড প্রদান করে ড্যাশবোর্ডে প্রবেশ করুন' : 'Enter your email and password to enter your dashboard';
 
@@ -632,6 +728,10 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
             document.getElementById('txt-no-account').textContent = isBn ? 'এখনও অ্যাকাউন্ট নেই?' : "Don't have an account yet?";
             document.getElementById('lnk-switch-signup').textContent = isBn ? 'প্রথমে সাইন আপ করুন →' : 'Sign Up first →';
             document.getElementById('txt-quick-demo').innerHTML = `<i data-lucide="zap" class="w-3.5 h-3.5 text-amber-500"></i><span>${isBn ? 'এক-ক্লিকে ডেমো প্রবেশ' : 'One-Click Demo Access'}</span>`;
+            const demoAuth = document.getElementById('lbl-demo-auth-role');
+            if (demoAuth) demoAuth.textContent = isBn ? 'সড়ক কর্তৃপক্ষ' : 'Road Authority';
+            const demoCrew = document.getElementById('lbl-demo-crew-role');
+            if (demoCrew) demoCrew.textContent = isBn ? 'মেরামত কর্মী (খুলনা)' : 'Crew (Khulna)';
 
             lucide.createIcons();
         }
@@ -639,7 +739,6 @@ $geoHierarchy = BangladeshGeo::getHierarchy();
         // Connect with i18n language change callback
         window.onLanguageChanged = function(lang) {
             applyLoginLanguage(lang);
-            onSignUpDivisionChange();
         };
     </script>
 </body>
